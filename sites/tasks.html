@@ -2,58 +2,200 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Purchase Agent - Tasks</title>
+    
+    <!-- PWA манифест -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#667eea">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ZZap Parser">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        h2 {
+            color: white;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.8rem;
+        }
+        
+        h3 {
+            color: white;
+            margin: 20px 0 10px;
+            font-size: 1.2rem;
+        }
+        
+        .input-group {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            width: 48%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 4%;
+        }
+        
+        button:last-child {
+            margin-right: 0;
+            background: #6c757d;
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        .table-wrapper {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            overflow-x: auto;
+        }
+        
         table {
             border-collapse: collapse;
             width: 100%;
-            margin-top: 10px;
+            font-size: 14px;
         }
+        
         th, td {
-            border: 1px solid #ccc;
-            padding: 6px;
+            border: 1px solid #ddd;
+            padding: 10px;
             text-align: center;
         }
+        
+        th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        
         tr.DONE {
-            background: #eaffea;
+            background: #d1f2eb;
         }
+        
         tr.ERROR {
-            background: #ffecec;
+            background: #f8d7da;
         }
+        
         tr.PENDING {
-            background: #fffbe6;
+            background: #fff3cd;
         }
+        
         tr.RUNNING {
-            background: #e6f3ff;
+            background: #cfe2ff;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 30px;
+            font-style: italic;
+        }
+        
+        /* Адаптив для мобильных */
+        @media (max-width: 768px) {
+            table {
+                font-size: 12px;
+            }
+            
+            th, td {
+                padding: 6px;
+            }
+            
+            h2 {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
 <body>
-    <h2>AI Purchase Agent - Tasks</h2>
+    <h2>🤖 AI Purchase Agent</h2>
     
-    <h3>Добавить задачу</h3>
-    <input id="partnumber" placeholder="Артикул (например: 1351PK)">
-    <button onclick="createTask()">Добавить</button>
-    <button onclick="loadTasks()">Обновить</button>
+    <h3>➕ Добавить задачу</h3>
+    <div class="input-group">
+        <input id="partnumber" placeholder="Артикул (например: 1351PK)" autocomplete="off">
+        <button onclick="createTask()">🔍 Добавить</button>
+        <button onclick="loadTasks()">🔄 Обновить</button>
+    </div>
     
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Артикул</th>
-                <th>Статус</th>
-                <th>Min цена</th>
-                <th>Avg цена</th>
-                <th>Ссылка</th>
-                <th>Ошибка</th>
-            </tr>
-        </thead>
-        <tbody id="tasks-body"></tbody>
-    </table>
+    <h3>📋 История поиска</h3>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Артикул</th>
+                    <th>Статус</th>
+                    <th>Min</th>
+                    <th>Avg</th>
+                    <th>Ссылка</th>
+                </tr>
+            </thead>
+            <tbody id="tasks-body">
+                <tr><td colspan="6" class="empty-state">Загрузка...</td></tr>
+            </tbody>
+        </table>
+    </div>
 
     <script>
         const API = '/api/tasks';
@@ -63,27 +205,31 @@
                 const res = await fetch(API);
                 const tasks = await res.json();
                 const tbody = document.getElementById('tasks-body');
+                
+                if (tasks.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Пока нет задач</td></tr>';
+                    return;
+                }
+                
                 tbody.innerHTML = '';
                 
                 for (const t of tasks) {
                     const tr = document.createElement('tr');
                     tr.className = t.status;
                     
-                    const min = t.min_price ?? '-';
-                    const avg = t.avg_price ?? '-';
+                    const min = t.min_price ? `${t.min_price} ₽` : '-';
+                    const avg = t.avg_price ? `${t.avg_price} ₽` : '-';
                     const link = t.result_url 
-                        ? `<a href="${t.result_url}" target="_blank">zzap</a>` 
+                        ? `<a href="${t.result_url}" target="_blank">🔗 zzap</a>` 
                         : '-';
-                    const error = t.error_message ?? '-';
                     
                     tr.innerHTML = `
                         <td>${t.id}</td>
-                        <td>${t.partnumber}</td>
+                        <td><strong>${t.partnumber}</strong></td>
                         <td>${t.status}</td>
                         <td>${min}</td>
                         <td>${avg}</td>
                         <td>${link}</td>
-                        <td>${error}</td>
                     `;
                     tbody.appendChild(tr);
                 }
@@ -93,21 +239,45 @@
         }
 
         async function createTask() {
-            const partnumber = document.getElementById('partnumber').value;
+            const partnumber = document.getElementById('partnumber').value.trim();
             
-            await fetch(API, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ partnumber })
-            });
+            if (!partnumber) {
+                alert('❌ Введите артикул!');
+                return;
+            }
             
-            document.getElementById('partnumber').value = '';
-            loadTasks();
+            try {
+                await fetch(API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ partnumber })
+                });
+                
+                document.getElementById('partnumber').value = '';
+                loadTasks();
+            } catch (e) {
+                console.error('createTask error:', e);
+                alert('❌ Ошибка создания задачи!');
+            }
         }
+
+        // Enter для создания задачи
+        document.getElementById('partnumber').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                createTask();
+            }
+        });
 
         // Автообновление каждые 2 секунды
         setInterval(loadTasks, 2000);
         loadTasks();
+        
+        // PWA Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service-worker.js')
+                .then(() => console.log('✅ PWA готово к установке'))
+                .catch((err) => console.error('❌ SW ошибка:', err));
+        }
     </script>
 </body>
 </html>
