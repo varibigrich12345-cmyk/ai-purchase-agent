@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Purchase Agent - Tasks</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 6px;
+            text-align: center;
+        }
+        tr.DONE {
+            background: #eaffea;
+        }
+        tr.ERROR {
+            background: #ffecec;
+        }
+        tr.PENDING {
+            background: #fffbe6;
+        }
+        tr.RUNNING {
+            background: #e6f3ff;
+        }
+    </style>
+</head>
+<body>
+    <h2>AI Purchase Agent - Tasks</h2>
+    
+    <h3>Добавить задачу</h3>
+    <input id="partnumber" placeholder="Артикул (например: 1351PK)">
+    <button onclick="createTask()">Добавить</button>
+    <button onclick="loadTasks()">Обновить</button>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Артикул</th>
+                <th>Статус</th>
+                <th>Min цена</th>
+                <th>Avg цена</th>
+                <th>Ссылка</th>
+                <th>Ошибка</th>
+            </tr>
+        </thead>
+        <tbody id="tasks-body"></tbody>
+    </table>
+
+    <script>
+        const API = '/api/tasks';
+
+        async function loadTasks() {
+            try {
+                const res = await fetch(API);
+                const tasks = await res.json();
+                const tbody = document.getElementById('tasks-body');
+                tbody.innerHTML = '';
+                
+                for (const t of tasks) {
+                    const tr = document.createElement('tr');
+                    tr.className = t.status;
+                    
+                    const min = t.min_price ?? '-';
+                    const avg = t.avg_price ?? '-';
+                    const link = t.result_url 
+                        ? `<a href="${t.result_url}" target="_blank">zzap</a>` 
+                        : '-';
+                    const error = t.error_message ?? '-';
+                    
+                    tr.innerHTML = `
+                        <td>${t.id}</td>
+                        <td>${t.partnumber}</td>
+                        <td>${t.status}</td>
+                        <td>${min}</td>
+                        <td>${avg}</td>
+                        <td>${link}</td>
+                        <td>${error}</td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+            } catch (e) {
+                console.error('loadTasks error:', e);
+            }
+        }
+
+        async function createTask() {
+            const partnumber = document.getElementById('partnumber').value;
+            
+            await fetch(API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ partnumber })
+            });
+            
+            document.getElementById('partnumber').value = '';
+            loadTasks();
+        }
+
+        // Автообновление каждые 2 секунды
+        setInterval(loadTasks, 2000);
+        loadTasks();
+    </script>
+</body>
+</html>

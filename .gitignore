@@ -1,0 +1,21 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.class
+venv/
+env/
+
+# Логи
+*.log
+worker.log
+
+# IDE
+.vscode/
+.idea/
+
+# Playwright
+debug_table.html
+
+# OS
+.DS_Store
+Thumbs.db
