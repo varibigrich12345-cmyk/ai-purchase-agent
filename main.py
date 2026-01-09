@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pathlib import Path
 from backend.api.tasks_api import router as tasks_router
 
@@ -20,9 +21,13 @@ app.add_middleware(
 # API роутер
 app.include_router(tasks_router, prefix="/api", tags=["tasks"])
 
+# НОВОЕ: Редирект с корня на tasks.html
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/tasks.html")
+
 # Статические файлы (фронтенд)
 app.mount("/", StaticFiles(directory=BASEDIR / "sites", html=True), name="static")
-
 
 if __name__ == "__main__":
     import uvicorn
