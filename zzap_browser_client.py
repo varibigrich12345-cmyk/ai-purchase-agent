@@ -8,8 +8,10 @@ import logging
 from typing import Optional, Dict, List
 from playwright.async_api import async_playwright, Page, Browser, TimeoutError as PlaywrightTimeout
 
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class ZZapBrowserClient:
     def __init__(self, headless: bool = True):
@@ -180,54 +182,63 @@ class ZZapBrowserClient:
             raise
 
     async def _extract_prices(self) -> List[float]:
-        """Извлечь цены из страницы"""
+        """
+        Извлекает цены из таблицы результатов.
+        Парсит только ячейки "Цена и условия", игнорируя фильтры и служебную информацию.
+        """
         prices = []
         try:
-            # Получаем весь текст страницы
-            page_text = await self.page.inner_text('body')
-            logger.info(f"📄 Длина текста: {len(page_text)} символов")
+            # Основная таблица результатов
+            table = self.page.locator("table#ctl00_BodyPlace_SearchGridView_DXMainTable")
             
-            # ИСПРАВЛЕННЫЕ паттерны для цен в формате "1 835р." и "6 790р."
-            patterns = [
-                r'(\d+)\s+(\d{3})р',           # "1 835р" или "6 790р"
-                r'(\d+)[\s\xa0](\d{3})р',      # С неразрывным пробелом
-                r'(\d{1,3}(?:\s\d{3})+)\s*р',  # Общий паттерн
-            ]
-
-            for pattern in patterns:
-                matches = re.findall(pattern, page_text, re.IGNORECASE)
-                logger.info(f"🔎 Паттерн '{pattern}': {len(matches)} совпадений")
-                
-                for match in matches:
-                    try:
-                        # Обработка кортежа или строки
-                        if isinstance(match, tuple):
-                            price_str = ''.join(match)
-                        else:
-                            price_str = match
+            # Проверяем, что таблица видна
+            if not await table.is_visible(timeout=5000):
+                logger.warning("⚠️ [ZZAP] Таблица результатов не видна")
+                return prices
+            
+            # Получаем все строки данных
+            rows = await table.locator("tr").all()
+            logger.info(f"📋 [ZZAP] Найдено строк в таблице: {len(rows)}")
+            
+            for row in rows:
+                try:
+                    # Ищем ячейки с ценами
+                    cells = await row.locator("td").all()
+                    
+                    for cell in cells:
+                        cell_text = await cell.inner_text()
                         
-                        # Очистка
-                        price_str = price_str.replace(' ', '').replace('\xa0', '').replace('\u202f', '').strip()
+                        # Пропускаем служебные строки
+                        if "Свернуть" in cell_text or "Запрошенный номер" in cell_text:
+                            break
                         
-                        if price_str:
-                            price = float(price_str)
-                            if 100 < price < 1000000:
-                                prices.append(price)
-                                logger.info(f"💵 Найдена цена: {price} р.")
-                    except (ValueError, AttributeError) as e:
-                        continue
-
-            # Удаляем дубликаты
+                        # Ищем паттерн цены: число + "р."
+                        # Но ТОЛЬКО если это не "Заказ от" или фильтр
+                        if "р." in cell_text and "Заказ от" not in cell_text:
+                            match = re.search(r"^(\d[\d\s]*)\s*р\.", cell_text.strip())
+                            if match:
+                                price_str = match.group(1).replace(" ", "").replace("\xa0", "")
+                                try:
+                                    price = float(price_str)
+                                    # Фильтруем явно неправильные значения
+                                    if 1500 < price < 100000:
+                                        prices.append(price)
+                                        logger.debug(f"💰 [ZZAP] Цена: {price}")
+                                except ValueError:
+                                    continue
+                except Exception as e:
+                    logger.debug(f"Ошибка обработки строки: {e}")
+                    continue
+            
+            # Убираем дубликаты
             prices = list(set(prices))
             
             if prices:
-                logger.info(f"✅ Найдено {len(prices)} уникальных цен: {sorted(prices)}")
+                logger.info(f"✅ [ZZAP] Найдено {len(prices)} уникальных цен: {sorted(prices)[:10]}...")
             else:
-                logger.warning("⚠️ Цены НЕ найдены!")
-                # Сохраняем для отладки
-                logger.info(f"📊 Фрагмент текста:\n{page_text[1000:2000]}")
-                
-        except Exception as e:
-            logger.error(f"❌ Ошибка извлечения цен: {e}")
+                logger.warning("⚠️ [ZZAP] Цены не найдены!")
             
+        except Exception as e:
+            logger.error(f"❌ [ZZAP] Ошибка извлечения цен: {e}")
+        
         return prices
