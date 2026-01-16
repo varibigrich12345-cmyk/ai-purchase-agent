@@ -89,12 +89,17 @@ async def process_tasks():
                     all_prices = []
                     zzap_min = None
                     stparts_min = None
+                    brand = None
 
                     if zzap_result.get('status') in ['DONE', 'success'] and zzap_result.get('prices'):
                         zzap_min = zzap_result['prices'].get('min')
                         if zzap_min:
                             all_prices.append(zzap_min)
                             logger.info(f"  ✅ ZZAP: {zzap_min}₽")
+                        # Получаем бренд из ZZAP
+                        if not brand and zzap_result.get('brand'):
+                            brand = zzap_result['brand']
+                            logger.info(f"  🏷️ Бренд (ZZAP): {brand}")
                     else:
                         logger.warning(f"  ⚠️ ZZAP: {zzap_result.get('status', 'error')}")
 
@@ -103,6 +108,10 @@ async def process_tasks():
                         if stparts_min:
                             all_prices.append(stparts_min)
                             logger.info(f"  ✅ STparts: {stparts_min}₽")
+                        # Получаем бренд из STparts если не нашли ранее
+                        if not brand and stparts_result.get('brand'):
+                            brand = stparts_result['brand']
+                            logger.info(f"  🏷️ Бренд (STparts): {brand}")
                     else:
                         logger.warning(f"  ⚠️ STparts: {stparts_result.get('status', 'error')}")
 
@@ -117,6 +126,7 @@ async def process_tasks():
                                 avg_price = ?,
                                 zzap_min_price = ?,
                                 stparts_min_price = ?,
+                                brand = ?,
                                 result_url = ?,
                                 completed_at = CURRENT_TIMESTAMP
                             WHERE id = ?""",
@@ -125,6 +135,7 @@ async def process_tasks():
                                 avg_price,
                                 zzap_min,
                                 stparts_min,
+                                brand,
                                 zzap_result.get('url') or stparts_result.get('url'),
                                 task_id
                             )
@@ -133,6 +144,8 @@ async def process_tasks():
                         logger.info(f"\n🎉 Задача #{task_id} завершена!")
                         logger.info(f"   💰 Лучшая цена: {min_price}₽")
                         logger.info(f"   📊 Средняя: {avg_price}₽")
+                        if brand:
+                            logger.info(f"   🏷️ Бренд: {brand}")
                         if zzap_min:
                             logger.info(f"   🔵 ZZAP: {zzap_min}₽")
                         if stparts_min:

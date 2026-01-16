@@ -106,14 +106,17 @@ class ZZapCDPClient(BaseBrowserClient):
 
             await asyncio.sleep(2)
 
-            # Парсинг цен
-            prices = await self._extract_prices()
+            # Парсинг цен и бренда
+            data = await self._extract_prices_and_brand()
+            prices = data['prices']
+            brand = data['brand']
 
             if not prices:
                 return {
                     'partnumber': partnumber,
                     'status': 'NO_RESULTS',
                     'prices': None,
+                    'brand': brand,
                     'url': self.page.url
                 }
 
@@ -124,6 +127,7 @@ class ZZapCDPClient(BaseBrowserClient):
                     'min': min(prices),
                     'avg': round(sum(prices) / len(prices), 2)
                 },
+                'brand': brand,
                 'url': self.page.url
             }
 
@@ -166,16 +170,17 @@ class ZZapCDPClient(BaseBrowserClient):
             'url': self.page.url if self.page else None
         }
 
-    async def _extract_prices(self) -> List[float]:
-        """Извлечь цены из таблицы результатов zzap.ru."""
+    async def _extract_prices_and_brand(self) -> Dict[str, Any]:
+        """Извлечь цены и бренд из таблицы результатов zzap.ru."""
         prices = []
+        brand = None
 
         try:
             table = self.page.locator("table#ctl00_BodyPlace_SearchGridView_DXMainTable")
 
             if not await table.is_visible(timeout=5000):
                 logger.warning("[zzap] Таблица не видна")
-                return prices
+                return {'prices': prices, 'brand': brand}
 
             rows = await table.locator("tr").all()
             logger.info(f"[zzap] Строк в таблице: {len(rows)}")
@@ -183,13 +188,24 @@ class ZZapCDPClient(BaseBrowserClient):
             for row in rows:
                 try:
                     cells = await row.locator("td").all()
+                    row_text = await row.inner_text()
+
+                    # Пропускаем служебные строки
+                    if "Свернуть" in row_text or "Запрошенный номер" in row_text:
+                        continue
+
+                    # Извлекаем бренд из первой колонки (обычно это производитель)
+                    if len(cells) >= 2 and brand is None:
+                        first_cell = await cells[0].inner_text()
+                        first_cell = first_cell.strip()
+                        # Бренд обычно в первой ячейке, если это не число и не пустая строка
+                        if first_cell and not first_cell.isdigit() and len(first_cell) > 1:
+                            if not any(x in first_cell.lower() for x in ['свернуть', 'развернуть', 'номер', 'р.', '₽']):
+                                brand = first_cell.split('\n')[0].strip()
+                                logger.info(f"[zzap] Найден бренд: {brand}")
 
                     for cell in cells:
                         cell_text = await cell.inner_text()
-
-                        # Пропускаем служебные строки
-                        if "Свернуть" in cell_text or "Запрошенный номер" in cell_text:
-                            break
 
                         # Ищем цену: число + "р."
                         if "р." in cell_text and "Заказ от" not in cell_text:
@@ -212,9 +228,9 @@ class ZZapCDPClient(BaseBrowserClient):
                 logger.info(f"[zzap] Найдено {len(prices)} цен: {sorted(prices)[:5]}...")
 
         except Exception as e:
-            logger.error(f"[zzap] Ошибка извлечения цен: {e}")
+            logger.error(f"[zzap] Ошибка извлечения данных: {e}")
 
-        return prices
+        return {'prices': prices, 'brand': brand}
 
 
 # ========== Тест ==========
