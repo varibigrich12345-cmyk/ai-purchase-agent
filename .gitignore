@@ -19,3 +19,9 @@ debug_table.html
 # OS
 .DS_Store
 Thumbs.db
+
+# Database
+tasks.db
+
+# Cookies backup
+cookies_backup/
