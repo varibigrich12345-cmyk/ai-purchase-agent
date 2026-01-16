@@ -56,8 +56,13 @@ class ZZapCDPClient(BaseBrowserClient):
 
     # ========== Методы поиска ==========
 
-    async def search_part(self, partnumber: str) -> Dict[str, Any]:
-        """Выполнить поиск запчасти на zzap.ru."""
+    async def search_part(self, partnumber: str, brand_filter: str = None) -> Dict[str, Any]:
+        """Выполнить поиск запчасти на zzap.ru.
+
+        Args:
+            partnumber: Артикул для поиска
+            brand_filter: Фильтр по бренду (необязательно)
+        """
         try:
             # Переход на страницу поиска
             url = f"{self.BASE_URL}/public/search.aspx?rawdata={partnumber}"
@@ -106,8 +111,8 @@ class ZZapCDPClient(BaseBrowserClient):
 
             await asyncio.sleep(2)
 
-            # Парсинг цен и бренда
-            data = await self._extract_prices_and_brand()
+            # Парсинг цен и бренда (с фильтрацией если указан brand_filter)
+            data = await self._extract_prices_and_brand(brand_filter=brand_filter)
             prices = data['prices']
             brand = data['brand']
 
@@ -135,18 +140,18 @@ class ZZapCDPClient(BaseBrowserClient):
             logger.error(f"[zzap] Ошибка поиска: {e}")
             raise
 
-    async def search_part_with_retry(self, partnumber: str, max_retries: int = 3) -> Dict[str, Any]:
+    async def search_part_with_retry(self, partnumber: str, brand_filter: str = None, max_retries: int = 3) -> Dict[str, Any]:
         """Поиск с retry."""
         for attempt in range(max_retries):
             try:
-                logger.info(f"[zzap] Попытка {attempt + 1}/{max_retries}: {partnumber}")
+                logger.info(f"[zzap] Попытка {attempt + 1}/{max_retries}: {partnumber}" + (f" [бренд: {brand_filter}]" if brand_filter else ""))
 
                 if attempt > 0:
                     import random
                     delay = (2 ** attempt) + random.uniform(0, 1)
                     await asyncio.sleep(delay)
 
-                result = await self.search_part(partnumber)
+                result = await self.search_part(partnumber, brand_filter=brand_filter)
 
                 if result.get('prices'):
                     logger.info(f"[zzap] Успех! min={result['prices']['min']}, avg={result['prices']['avg']}")
@@ -170,10 +175,16 @@ class ZZapCDPClient(BaseBrowserClient):
             'url': self.page.url if self.page else None
         }
 
-    async def _extract_prices_and_brand(self) -> Dict[str, Any]:
-        """Извлечь цены и бренд из таблицы результатов zzap.ru."""
+    async def _extract_prices_and_brand(self, brand_filter: str = None) -> Dict[str, Any]:
+        """Извлечь цены и бренд из таблицы результатов zzap.ru.
+
+        Args:
+            brand_filter: Если указан, учитывать только строки с этим брендом
+        """
         prices = []
         brand = None
+        filtered_count = 0
+        total_count = 0
 
         try:
             table = self.page.locator("table#ctl00_BodyPlace_SearchGridView_DXMainTable")
@@ -185,6 +196,9 @@ class ZZapCDPClient(BaseBrowserClient):
             rows = await table.locator("tr").all()
             logger.info(f"[zzap] Строк в таблице: {len(rows)}")
 
+            if brand_filter:
+                logger.info(f"[zzap] Фильтрация по бренду: {brand_filter}")
+
             for row in rows:
                 try:
                     cells = await row.locator("td").all()
@@ -195,14 +209,24 @@ class ZZapCDPClient(BaseBrowserClient):
                         continue
 
                     # Извлекаем бренд из первой колонки (обычно это производитель)
-                    if len(cells) >= 2 and brand is None:
+                    row_brand = None
+                    if len(cells) >= 2:
                         first_cell = await cells[0].inner_text()
                         first_cell = first_cell.strip()
                         # Бренд обычно в первой ячейке, если это не число и не пустая строка
                         if first_cell and not first_cell.isdigit() and len(first_cell) > 1:
                             if not any(x in first_cell.lower() for x in ['свернуть', 'развернуть', 'номер', 'р.', '₽']):
-                                brand = first_cell.split('\n')[0].strip()
-                                logger.info(f"[zzap] Найден бренд: {brand}")
+                                row_brand = first_cell.split('\n')[0].strip()
+                                if brand is None:
+                                    brand = row_brand
+                                    logger.info(f"[zzap] Найден бренд: {brand}")
+
+                    # Если указан фильтр по бренду - пропускаем строки с другим брендом
+                    if brand_filter and row_brand:
+                        total_count += 1
+                        if brand_filter.lower() not in row_brand.lower():
+                            continue
+                        filtered_count += 1
 
                     for cell in cells:
                         cell_text = await cell.inner_text()
@@ -223,6 +247,9 @@ class ZZapCDPClient(BaseBrowserClient):
                     continue
 
             prices = list(set(prices))
+
+            if brand_filter and total_count > 0:
+                logger.info(f"[zzap] Отфильтровано: {filtered_count}/{total_count} строк по бренду '{brand_filter}'")
 
             if prices:
                 logger.info(f"[zzap] Найдено {len(prices)} цен: {sorted(prices)[:5]}...")

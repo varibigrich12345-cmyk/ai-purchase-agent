@@ -142,6 +142,15 @@
             font-size: 13px;
         }
 
+        .card-filter {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
         /* Статус бейджи */
         .status-badge {
             padding: 4px 10px;
@@ -326,6 +335,7 @@
 
         <div class="input-group">
             <input id="partnumber" placeholder="Артикул (например: 1351PK)" autocomplete="off">
+            <input id="search-brand" placeholder="Бренд (например: Peugeot) — необязательно" autocomplete="off">
             <div class="btn-group">
                 <button onclick="createTask()">Найти</button>
                 <button class="secondary" onclick="loadTasks()">Обновить</button>
@@ -372,6 +382,7 @@
                         <div class="card-header-left">
                             <span class="card-id">#${t.id}</span>
                             <span class="card-partnumber">${t.partnumber}</span>
+                            ${t.search_brand ? `<span class="card-filter">[${t.search_brand}]</span>` : ''}
                             ${t.brand ? `<span class="card-brand">(${t.brand})</span>` : ''}
                         </div>
                         <span class="status-badge status-${t.status}">${t.status}</span>
@@ -454,8 +465,10 @@
         }
 
         async function createTask() {
-            const input = document.getElementById('partnumber');
-            const partnumber = input.value.trim();
+            const partnumberInput = document.getElementById('partnumber');
+            const brandInput = document.getElementById('search-brand');
+            const partnumber = partnumberInput.value.trim();
+            const searchBrand = brandInput.value.trim();
 
             if (!partnumber) {
                 alert('Введите артикул!');
@@ -463,13 +476,19 @@
             }
 
             try {
+                const payload = { partnumber };
+                if (searchBrand) {
+                    payload.search_brand = searchBrand;
+                }
+
                 await fetch(API, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ partnumber })
+                    body: JSON.stringify(payload)
                 });
 
-                input.value = '';
+                partnumberInput.value = '';
+                brandInput.value = '';
                 loadTasks();
             } catch (e) {
                 console.error('createTask error:', e);
@@ -479,6 +498,12 @@
 
         // Enter для создания задачи
         document.getElementById('partnumber').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                createTask();
+            }
+        });
+
+        document.getElementById('search-brand').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 createTask();
             }

@@ -17,11 +17,13 @@ def get_db():
 
 class TaskCreate(BaseModel):
     partnumber: str
+    search_brand: Optional[str] = None
 
 
 class TaskResponse(BaseModel):
     id: int
     partnumber: str
+    search_brand: Optional[str] = None
     status: str
     min_price: Optional[float] = None
     avg_price: Optional[float] = None
@@ -39,12 +41,12 @@ async def create_task(task: TaskCreate):
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO tasks (partnumber, status) VALUES (?, ?)",
-        (task.partnumber, "PENDING")
+        "INSERT INTO tasks (partnumber, search_brand, status) VALUES (?, ?, ?)",
+        (task.partnumber, task.search_brand, "PENDING")
     )
     task_id = cursor.lastrowid
     conn.commit()
-    
+
     cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
     row = cursor.fetchone()
     conn.close()

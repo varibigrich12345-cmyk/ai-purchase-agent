@@ -132,8 +132,13 @@ class STPartsCDPClient(BaseBrowserClient):
 
     # ========== Методы поиска ==========
 
-    async def search_part(self, partnumber: str) -> Dict[str, Any]:
-        """Поиск запчасти по артикулу."""
+    async def search_part(self, partnumber: str, brand_filter: str = None) -> Dict[str, Any]:
+        """Поиск запчасти по артикулу.
+
+        Args:
+            partnumber: Артикул для поиска
+            brand_filter: Фильтр по бренду (необязательно)
+        """
         try:
             # Переходим на страницу клиентов где есть поиск
             await self.page.goto(f"{self.BASE_URL}/clients", wait_until='networkidle', timeout=60000)
@@ -165,8 +170,8 @@ class STPartsCDPClient(BaseBrowserClient):
             except:
                 logger.debug("[stparts] Ссылка 'Цены и аналоги' не найдена")
 
-            # Извлекаем цены и бренд
-            data = await self._extract_prices_and_brand()
+            # Извлекаем цены и бренд (с фильтрацией если указан brand_filter)
+            data = await self._extract_prices_and_brand(brand_filter=brand_filter)
             prices = data['prices']
             brand = data['brand']
 
@@ -199,12 +204,12 @@ class STPartsCDPClient(BaseBrowserClient):
                 'error': str(e)
             }
 
-    async def search_part_with_retry(self, partnumber: str, max_retries: int = 3) -> Dict[str, Any]:
+    async def search_part_with_retry(self, partnumber: str, brand_filter: str = None, max_retries: int = 3) -> Dict[str, Any]:
         """Поиск с повторными попытками."""
         for attempt in range(1, max_retries + 1):
-            logger.info(f"[stparts] Попытка {attempt}/{max_retries}: {partnumber}")
+            logger.info(f"[stparts] Попытка {attempt}/{max_retries}: {partnumber}" + (f" [бренд: {brand_filter}]" if brand_filter else ""))
 
-            result = await self.search_part(partnumber)
+            result = await self.search_part(partnumber, brand_filter=brand_filter)
 
             if result.get('status') == 'success' and result.get('prices', {}).get('min'):
                 return result
@@ -214,10 +219,16 @@ class STPartsCDPClient(BaseBrowserClient):
 
         return result
 
-    async def _extract_prices_and_brand(self) -> Dict[str, Any]:
-        """Извлечь цены и бренд из таблицы результатов."""
+    async def _extract_prices_and_brand(self, brand_filter: str = None) -> Dict[str, Any]:
+        """Извлечь цены и бренд из таблицы результатов.
+
+        Args:
+            brand_filter: Если указан, учитывать только строки с этим брендом
+        """
         prices = []
         brand = None
+        filtered_count = 0
+        total_count = 0
 
         try:
             table = self.page.locator("#searchResultsTable")
@@ -227,24 +238,36 @@ class STPartsCDPClient(BaseBrowserClient):
             count = await rows.count()
             logger.info(f"[stparts] Найдено {count} строк в таблице")
 
+            if brand_filter:
+                logger.info(f"[stparts] Фильтрация по бренду: {brand_filter}")
+
             for i in range(count):
                 row = rows.nth(i)
                 row_text = await row.inner_text()
 
-                # Извлекаем бренд из первой строки (обычно в колонке "Бренд" или "Производитель")
-                if brand is None:
-                    cells = row.locator("td")
-                    cells_count = await cells.count()
-                    if cells_count >= 2:
-                        # Пробуем найти бренд в первых ячейках
-                        for j in range(min(3, cells_count)):
-                            cell_text = await cells.nth(j).inner_text()
-                            cell_text = cell_text.strip()
-                            # Бренд - это текст без цен и спецсимволов
-                            if cell_text and not re.search(r'[\d₽р]', cell_text) and len(cell_text) > 1 and len(cell_text) < 50:
-                                brand = cell_text.split('\n')[0].strip()
+                # Извлекаем бренд из строки (обычно в колонке "Бренд")
+                row_brand = None
+                cells = row.locator("td")
+                cells_count = await cells.count()
+                if cells_count >= 2:
+                    # Пробуем найти бренд в первых ячейках
+                    for j in range(min(3, cells_count)):
+                        cell_text = await cells.nth(j).inner_text()
+                        cell_text = cell_text.strip()
+                        # Бренд - это текст без цен и спецсимволов
+                        if cell_text and not re.search(r'[\d₽р]', cell_text) and len(cell_text) > 1 and len(cell_text) < 50:
+                            row_brand = cell_text.split('\n')[0].strip()
+                            if brand is None:
+                                brand = row_brand
                                 logger.info(f"[stparts] Найден бренд: {brand}")
-                                break
+                            break
+
+                # Если указан фильтр по бренду - пропускаем строки с другим брендом
+                if brand_filter and row_brand:
+                    total_count += 1
+                    if brand_filter.lower() not in row_brand.lower():
+                        continue
+                    filtered_count += 1
 
                 # Ищем цену в формате "141,40 ₽" или "1 234,56 ₽"
                 match = re.search(r"([\d\s]+[,.]?\d*)\s*₽", row_text)
@@ -259,6 +282,9 @@ class STPartsCDPClient(BaseBrowserClient):
 
         except Exception as e:
             logger.debug(f"[stparts] Ошибка извлечения данных: {e}")
+
+        if brand_filter and total_count > 0:
+            logger.info(f"[stparts] Отфильтровано: {filtered_count}/{total_count} строк по бренду '{brand_filter}'")
 
         unique_prices = list(set(prices))
         if unique_prices:

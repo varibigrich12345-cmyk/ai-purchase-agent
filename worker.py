@@ -63,15 +63,17 @@ async def process_tasks():
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT id, partnumber FROM tasks WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT 1"
+                    "SELECT id, partnumber, search_brand FROM tasks WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT 1"
                 )
 
                 task = cursor.fetchone()
 
                 if task:
-                    task_id, partnumber = task['id'], task['partnumber']
+                    task_id, partnumber, search_brand = task['id'], task['partnumber'], task['search_brand']
                     logger.info(f"\n{'='*60}")
                     logger.info(f"📦 Обработка задачи #{task_id}: {partnumber}")
+                    if search_brand:
+                        logger.info(f"   🔍 Фильтр по бренду: {search_brand}")
                     logger.info(f"{'='*60}")
 
                     cursor.execute(
@@ -81,10 +83,10 @@ async def process_tasks():
                     conn.commit()
 
                     logger.info("🔵 [1/2] Поиск на ZZAP.ru...")
-                    zzap_result = await zzap_client.search_part_with_retry(partnumber, max_retries=2)
+                    zzap_result = await zzap_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
 
                     logger.info("🟢 [2/2] Поиск на STparts.ru...")
-                    stparts_result = await stparts_client.search_part_with_retry(partnumber, max_retries=2)
+                    stparts_result = await stparts_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
 
                     all_prices = []
                     zzap_min = None
