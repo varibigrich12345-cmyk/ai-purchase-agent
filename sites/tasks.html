@@ -331,13 +331,14 @@
                         <th>Артикул</th>
                         <th>Бренд</th>
                         <th>Статус</th>
-                        <th>Лучшая цена</th>
                         <th class="site-zzap">ZZAP</th>
                         <th class="site-stparts">STparts</th>
+                        <th>Min</th>
+                        <th>Avg</th>
                     </tr>
                 </thead>
                 <tbody id="tasks-body">
-                    <tr><td colspan="7" class="empty-state">Загрузка...</td></tr>
+                    <tr><td colspan="8" class="empty-state">Загрузка...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -366,7 +367,7 @@
                 const tbody = document.getElementById('tasks-body');
 
                 if (tasks.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Пока нет задач</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Пока нет задач</td></tr>';
                     return;
                 }
 
@@ -376,12 +377,13 @@
                     const tr = document.createElement('tr');
                     tr.className = t.status;
 
-                    // Лучшая цена
-                    const bestPrice = t.min_price
-                        ? formatPrice(t.min_price, 'price-best')
-                        : '<span class="no-data">-</span>';
+                    // Бренд
+                    const brandCell = t.brand ? `<strong>${t.brand}</strong>` : '<span class="no-data">-</span>';
 
-                    // ZZAP колонка
+                    // Статус бейдж
+                    const statusBadge = `<span class="status-badge status-${t.status}">${t.status}</span>`;
+
+                    // ZZAP колонка - цена + ссылка
                     let zzapCell = '';
                     if (t.zzap_min_price) {
                         zzapCell = `
@@ -394,7 +396,7 @@
                         zzapCell = '<span class="no-data">-</span>';
                     }
 
-                    // STparts колонка
+                    // STparts колонка - цена + ссылка
                     let stpartsCell = '';
                     if (t.stparts_min_price) {
                         stpartsCell = `
@@ -407,20 +409,25 @@
                         stpartsCell = '<span class="no-data">-</span>';
                     }
 
-                    // Статус бейдж
-                    const statusBadge = `<span class="status-badge status-${t.status}">${t.status}</span>`;
+                    // Min цена (лучшая) - зелёная
+                    const minPrice = t.min_price
+                        ? formatPrice(t.min_price, 'price-best')
+                        : '<span class="no-data">-</span>';
 
-                    // Бренд
-                    const brandCell = t.brand ? `<strong>${t.brand}</strong>` : '<span class="no-data">-</span>';
+                    // Avg цена
+                    const avgPrice = t.avg_price
+                        ? formatPrice(t.avg_price, '')
+                        : '<span class="no-data">-</span>';
 
                     tr.innerHTML = `
                         <td>${t.id}</td>
                         <td><strong>${t.partnumber}</strong></td>
                         <td>${brandCell}</td>
                         <td>${statusBadge}</td>
-                        <td>${bestPrice}</td>
                         <td>${zzapCell}</td>
                         <td>${stpartsCell}</td>
+                        <td>${minPrice}</td>
+                        <td>${avgPrice}</td>
                     `;
                     tbody.appendChild(tr);
                 }
