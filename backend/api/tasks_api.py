@@ -25,6 +25,8 @@ class TaskResponse(BaseModel):
     status: str
     min_price: Optional[float] = None
     avg_price: Optional[float] = None
+    zzap_min_price: Optional[float] = None
+    stparts_min_price: Optional[float] = None
     result_url: Optional[str] = None
     error_message: Optional[str] = None
     created_at: str
