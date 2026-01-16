@@ -3,233 +3,419 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Purchase Agent - Tasks</title>
-    
+    <title>AI Purchase Agent</title>
+
     <!-- PWA манифест -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#667eea">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="ZZap Parser">
+    <meta name="apple-mobile-web-app-title" content="AI Purchase">
     <link rel="apple-touch-icon" href="/icon-192.png">
-    
+
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            padding: 15px;
+            padding: 12px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
         }
-        
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
         h2 {
             color: white;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             text-align: center;
-            font-size: 1.8rem;
+            font-size: 1.6rem;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
-        
+
         h3 {
             color: white;
-            margin: 20px 0 10px;
-            font-size: 1.2rem;
+            margin: 16px 0 8px;
+            font-size: 1.1rem;
         }
-        
+
+        /* Форма добавления */
         .input-group {
             background: white;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            padding: 16px;
+            border-radius: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         }
-        
+
         input {
             width: 100%;
-            padding: 12px;
-            margin-bottom: 10px;
+            padding: 14px 16px;
+            margin-bottom: 12px;
             border: 2px solid #e0e0e0;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 16px;
+            transition: border-color 0.2s;
         }
-        
+
         input:focus {
             outline: none;
             border-color: #667eea;
         }
-        
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
         button {
-            width: 48%;
-            padding: 12px;
+            flex: 1;
+            padding: 14px 16px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            border-radius: 8px;
-            font-size: 16px;
+            border-radius: 12px;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            margin-right: 4%;
+            transition: transform 0.1s, opacity 0.2s;
+            min-height: 48px; /* Удобно для тач */
         }
-        
-        button:last-child {
-            margin-right: 0;
+
+        button:active {
+            transform: scale(0.97);
+        }
+
+        button.secondary {
             background: #6c757d;
         }
-        
-        button:active {
-            transform: scale(0.98);
-        }
-        
+
+        /* Таблица */
         .table-wrapper {
             background: white;
-            border-radius: 12px;
-            padding: 15px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
-        
+
         table {
             border-collapse: collapse;
             width: 100%;
+            min-width: 600px;
             font-size: 14px;
         }
-        
+
         th, td {
-            border: 1px solid #ddd;
-            padding: 10px;
+            border: 1px solid #e0e0e0;
+            padding: 10px 8px;
             text-align: center;
+            white-space: nowrap;
         }
-        
+
         th {
-            background: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             font-weight: 600;
             position: sticky;
             top: 0;
+            z-index: 10;
         }
-        
+
+        /* Колонки сайтов */
+        th.site-zzap {
+            background: #3498db;
+        }
+
+        th.site-stparts {
+            background: #27ae60;
+        }
+
+        /* Цены - крупный шрифт */
+        .price {
+            font-size: 1.1em;
+            font-weight: 700;
+        }
+
+        .price-best {
+            color: #27ae60;
+            font-size: 1.2em;
+        }
+
+        .price-zzap {
+            color: #3498db;
+        }
+
+        .price-stparts {
+            color: #27ae60;
+        }
+
+        /* Статусы строк */
         tr.DONE {
-            background: #d1f2eb;
+            background: #d4edda;
         }
-        
+
         tr.ERROR {
             background: #f8d7da;
         }
-        
+
         tr.PENDING {
             background: #fff3cd;
         }
-        
+
         tr.RUNNING {
-            background: #cfe2ff;
+            background: #cce5ff;
             animation: pulse 1.5s infinite;
         }
-        
+
         @keyframes pulse {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+            50% { opacity: 0.6; }
         }
-        
+
+        /* Ссылки */
         a {
-            color: #667eea;
+            color: white;
             text-decoration: none;
             font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 6px;
+            display: inline-block;
+            font-size: 12px;
+            transition: opacity 0.2s;
         }
-        
+
         a:hover {
-            text-decoration: underline;
+            opacity: 0.85;
         }
-        
+
+        a.link-zzap {
+            background: #3498db;
+        }
+
+        a.link-stparts {
+            background: #27ae60;
+        }
+
+        .no-data {
+            color: #999;
+            font-style: italic;
+        }
+
         .empty-state {
             text-align: center;
             color: #999;
             padding: 30px;
             font-style: italic;
         }
-        
-        /* Адаптив для мобильных */
+
+        /* Статус бейдж */
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-DONE { background: #d4edda; color: #155724; }
+        .status-ERROR { background: #f8d7da; color: #721c24; }
+        .status-PENDING { background: #fff3cd; color: #856404; }
+        .status-RUNNING { background: #cce5ff; color: #004085; }
+
+        /* Мобильная адаптация */
         @media (max-width: 768px) {
+            body {
+                padding: 8px;
+            }
+
+            h2 {
+                font-size: 1.4rem;
+            }
+
+            .input-group {
+                padding: 12px;
+            }
+
+            input {
+                padding: 12px 14px;
+            }
+
+            button {
+                padding: 12px;
+                font-size: 14px;
+            }
+
+            table {
+                font-size: 13px;
+            }
+
+            th, td {
+                padding: 8px 6px;
+            }
+
+            .price {
+                font-size: 1em;
+            }
+
+            a {
+                padding: 5px 8px;
+                font-size: 11px;
+            }
+        }
+
+        /* Очень маленькие экраны */
+        @media (max-width: 480px) {
+            h2 {
+                font-size: 1.2rem;
+            }
+
+            h3 {
+                font-size: 1rem;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+
             table {
                 font-size: 12px;
             }
-            
-            th, td {
-                padding: 6px;
-            }
-            
-            h2 {
-                font-size: 1.5rem;
+        }
+
+        /* Подсказка о скролле */
+        .scroll-hint {
+            display: none;
+            text-align: center;
+            color: rgba(255,255,255,0.8);
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .scroll-hint {
+                display: block;
             }
         }
     </style>
 </head>
 <body>
-    <h2>🤖 AI Purchase Agent</h2>
-    
-    <h3>➕ Добавить задачу</h3>
-    <div class="input-group">
-        <input id="partnumber" placeholder="Артикул (например: 1351PK)" autocomplete="off">
-        <button onclick="createTask()">🔍 Добавить</button>
-        <button onclick="loadTasks()">🔄 Обновить</button>
-    </div>
-    
-    <h3>📋 История поиска</h3>
-    <div class="table-wrapper">
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Артикул</th>
-                    <th>Статус</th>
-                    <th>Min</th>
-                    <th>Avg</th>
-                    <th>Ссылка</th>
-                </tr>
-            </thead>
-            <tbody id="tasks-body">
-                <tr><td colspan="6" class="empty-state">Загрузка...</td></tr>
-            </tbody>
-        </table>
+    <div class="container">
+        <h2>AI Purchase Agent</h2>
+
+        <h3>Добавить задачу</h3>
+        <div class="input-group">
+            <input id="partnumber" placeholder="Артикул (например: 1351PK)" autocomplete="off">
+            <div class="btn-group">
+                <button onclick="createTask()">Добавить</button>
+                <button class="secondary" onclick="loadTasks()">Обновить</button>
+            </div>
+        </div>
+
+        <h3>История поиска</h3>
+        <div class="scroll-hint">Прокрутите таблицу вправо</div>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Артикул</th>
+                        <th>Статус</th>
+                        <th>Лучшая цена</th>
+                        <th class="site-zzap">ZZAP</th>
+                        <th class="site-stparts">STparts</th>
+                    </tr>
+                </thead>
+                <tbody id="tasks-body">
+                    <tr><td colspan="6" class="empty-state">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <script>
         const API = '/api/tasks';
+
+        function formatPrice(price, cssClass = '') {
+            if (!price) return '<span class="no-data">-</span>';
+            return `<span class="price ${cssClass}">${price.toLocaleString('ru-RU')} ₽</span>`;
+        }
+
+        function makeZzapLink(partnumber) {
+            return `https://www.zzap.ru/public/search.aspx?rawdata=${encodeURIComponent(partnumber)}`;
+        }
+
+        function makeStpartsLink(partnumber) {
+            return `https://stparts.ru/search?pcode=${encodeURIComponent(partnumber)}`;
+        }
 
         async function loadTasks() {
             try {
                 const res = await fetch(API);
                 const tasks = await res.json();
                 const tbody = document.getElementById('tasks-body');
-                
+
                 if (tasks.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Пока нет задач</td></tr>';
                     return;
                 }
-                
+
                 tbody.innerHTML = '';
-                
+
                 for (const t of tasks) {
                     const tr = document.createElement('tr');
                     tr.className = t.status;
-                    
-                    const min = t.min_price ? `${t.min_price} ₽` : '-';
-                    const avg = t.avg_price ? `${t.avg_price} ₽` : '-';
-                    const link = t.result_url 
-                        ? `<a href="${t.result_url}" target="_blank">🔗 zzap</a>` 
-                        : '-';
-                    
+
+                    // Лучшая цена
+                    const bestPrice = t.min_price
+                        ? formatPrice(t.min_price, 'price-best')
+                        : '<span class="no-data">-</span>';
+
+                    // ZZAP колонка
+                    let zzapCell = '';
+                    if (t.zzap_min_price) {
+                        zzapCell = `
+                            ${formatPrice(t.zzap_min_price, 'price-zzap')}<br>
+                            <a href="${makeZzapLink(t.partnumber)}" target="_blank" class="link-zzap">Открыть</a>
+                        `;
+                    } else if (t.status === 'DONE') {
+                        zzapCell = '<span class="no-data">Не найдено</span>';
+                    } else {
+                        zzapCell = '<span class="no-data">-</span>';
+                    }
+
+                    // STparts колонка
+                    let stpartsCell = '';
+                    if (t.stparts_min_price) {
+                        stpartsCell = `
+                            ${formatPrice(t.stparts_min_price, 'price-stparts')}<br>
+                            <a href="${makeStpartsLink(t.partnumber)}" target="_blank" class="link-stparts">Открыть</a>
+                        `;
+                    } else if (t.status === 'DONE') {
+                        stpartsCell = '<span class="no-data">Не найдено</span>';
+                    } else {
+                        stpartsCell = '<span class="no-data">-</span>';
+                    }
+
+                    // Статус бейдж
+                    const statusBadge = `<span class="status-badge status-${t.status}">${t.status}</span>`;
+
                     tr.innerHTML = `
                         <td>${t.id}</td>
                         <td><strong>${t.partnumber}</strong></td>
-                        <td>${t.status}</td>
-                        <td>${min}</td>
-                        <td>${avg}</td>
-                        <td>${link}</td>
+                        <td>${statusBadge}</td>
+                        <td>${bestPrice}</td>
+                        <td>${zzapCell}</td>
+                        <td>${stpartsCell}</td>
                     `;
                     tbody.appendChild(tr);
                 }
@@ -239,25 +425,26 @@
         }
 
         async function createTask() {
-            const partnumber = document.getElementById('partnumber').value.trim();
-            
+            const input = document.getElementById('partnumber');
+            const partnumber = input.value.trim();
+
             if (!partnumber) {
-                alert('❌ Введите артикул!');
+                alert('Введите артикул!');
                 return;
             }
-            
+
             try {
                 await fetch(API, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ partnumber })
                 });
-                
-                document.getElementById('partnumber').value = '';
+
+                input.value = '';
                 loadTasks();
             } catch (e) {
                 console.error('createTask error:', e);
-                alert('❌ Ошибка создания задачи!');
+                alert('Ошибка создания задачи!');
             }
         }
 
@@ -271,12 +458,11 @@
         // Автообновление каждые 2 секунды
         setInterval(loadTasks, 2000);
         loadTasks();
-        
+
         // PWA Service Worker
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/service-worker.js')
-                .then(() => console.log('✅ PWA готово к установке'))
-                .catch((err) => console.error('❌ SW ошибка:', err));
+                .catch((err) => console.error('SW error:', err));
         }
     </script>
 </body>
