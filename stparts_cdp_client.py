@@ -160,15 +160,23 @@ class STPartsCDPClient(BaseBrowserClient):
             logger.info(f"[stparts] Поиск: {partnumber}")
             await self.page.wait_for_timeout(5000)
 
-            # Пробуем нажать "Цены и аналоги"
-            try:
-                link = self.page.get_by_role("link", name="Цены и аналоги").first
-                if await link.is_visible(timeout=5000):
-                    await link.click()
+            # Если указан brand_filter, ищем и кликаем на нужный бренд в списке
+            if brand_filter:
+                logger.info(f"[stparts] Пробуем найти и кликнуть на бренд '{brand_filter}'...")
+                clicked = await self._click_brand_row(brand_filter)
+                if clicked:
                     await self.page.wait_for_timeout(3000)
-                    logger.info("[stparts] Перешли на страницу цен")
-            except:
-                logger.debug("[stparts] Ссылка 'Цены и аналоги' не найдена")
+                    logger.info(f"[stparts] Успешно кликнули на бренд '{brand_filter}'")
+            else:
+                # Пробуем нажать "Цены и аналоги"
+                try:
+                    link = self.page.get_by_role("link", name="Цены и аналоги").first
+                    if await link.is_visible(timeout=5000):
+                        await link.click()
+                        await self.page.wait_for_timeout(3000)
+                        logger.info("[stparts] Перешли на страницу цен")
+                except:
+                    logger.debug("[stparts] Ссылка 'Цены и аналоги' не найдена")
 
             # Извлекаем цены и бренд (с фильтрацией если указан brand_filter)
             data = await self._extract_prices_and_brand(brand_filter=brand_filter)
@@ -218,6 +226,54 @@ class STPartsCDPClient(BaseBrowserClient):
                 await asyncio.sleep(2 * attempt)
 
         return result
+
+    async def _click_brand_row(self, brand_filter: str) -> bool:
+        """Найти и кликнуть на строку с нужным брендом в результатах поиска.
+
+        На странице /search?pcode=XXX показывается список брендов с ссылками
+        "Цены и аналоги" -> /search/{brand}/{partnumber}
+
+        Args:
+            brand_filter: Название бренда для поиска (например, "Peugeot")
+
+        Returns:
+            True если нашли и кликнули, False иначе
+        """
+        logger.info(f"[stparts] Поиск бренда '{brand_filter}' на странице {self.page.url}")
+
+        try:
+            # Ищем ссылки "Цены и аналоги" которые ведут на страницу нужного бренда
+            # Формат ссылки: /search/{brand}/{partnumber}
+            all_links = await self.page.locator("a").all()
+            found_brands = []
+
+            for link in all_links:
+                href = await link.get_attribute("href") or ""
+                text = (await link.inner_text()).strip()
+
+                # Ищем ссылки формата /search/Brand/PartNumber
+                if "/search/" in href and text == "Цены и аналоги":
+                    # Извлекаем бренд из URL: /search/Peugeot-Citroen/1920QK -> Peugeot-Citroen
+                    parts = href.split("/")
+                    if len(parts) >= 3:
+                        url_brand = parts[2]  # Бренд в URL
+                        if url_brand not in found_brands:
+                            found_brands.append(url_brand)
+
+                        # Проверяем совпадение бренда (без учёта регистра, частичное)
+                        if brand_filter.lower() in url_brand.lower() or url_brand.lower() in brand_filter.lower():
+                            logger.info(f"[stparts] Найден бренд '{url_brand}', кликаем на '{href}'")
+                            await link.click()
+                            await self.page.wait_for_timeout(3000)
+                            logger.info(f"[stparts] Перешли на страницу бренда: {self.page.url}")
+                            return True
+
+            logger.warning(f"[stparts] Бренд '{brand_filter}' не найден. Доступные: {found_brands}")
+            return False
+
+        except Exception as e:
+            logger.error(f"[stparts] Ошибка при клике на бренд: {e}")
+            return False
 
     async def _extract_prices_and_brand(self, brand_filter: str = None) -> Dict[str, Any]:
         """Извлечь цены и бренд из таблицы результатов.
