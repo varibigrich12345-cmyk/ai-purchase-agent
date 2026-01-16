@@ -224,11 +224,18 @@ class STPartsCDPClient(BaseBrowserClient):
 
         Args:
             brand_filter: Если указан, учитывать только строки с этим брендом
+
+        Структура таблицы STparts:
+        - Ячейка [2] с классом 'resultBrand' содержит БРЕНД (CGA, Peugeot и т.д.)
+        - Цены в формате "1 234,56 ₽"
         """
         prices = []
         brand = None
         filtered_count = 0
         total_count = 0
+
+        # Индекс ячейки с брендом в структуре STparts
+        BRAND_CELL_INDEX = 2
 
         try:
             table = self.page.locator("#searchResultsTable")
@@ -245,22 +252,34 @@ class STPartsCDPClient(BaseBrowserClient):
                 row = rows.nth(i)
                 row_text = await row.inner_text()
 
-                # Извлекаем бренд из строки (обычно в колонке "Бренд")
+                # Пропускаем строки-заголовки групп
+                if 'resultTitleMain' in (await row.get_attribute("class") or ""):
+                    continue
+
+                # Извлекаем бренд из ячейки [2] (класс resultBrand)
                 row_brand = None
                 cells = row.locator("td")
                 cells_count = await cells.count()
-                if cells_count >= 2:
-                    # Пробуем найти бренд в первых ячейках
-                    for j in range(min(3, cells_count)):
-                        cell_text = await cells.nth(j).inner_text()
-                        cell_text = cell_text.strip()
-                        # Бренд - это текст без цен и спецсимволов
-                        if cell_text and not re.search(r'[\d₽р]', cell_text) and len(cell_text) > 1 and len(cell_text) < 50:
-                            row_brand = cell_text.split('\n')[0].strip()
-                            if brand is None:
-                                brand = row_brand
-                                logger.info(f"[stparts] Найден бренд: {brand}")
-                            break
+
+                # Пробуем найти ячейку с классом resultBrand
+                brand_cell = row.locator("td.resultBrand")
+                if await brand_cell.count() > 0:
+                    brand_text = await brand_cell.first.inner_text()
+                    brand_text = brand_text.strip()
+                    if brand_text and len(brand_text) > 0:
+                        row_brand = brand_text.split('\n')[0].strip()
+                        if brand is None and row_brand:
+                            brand = row_brand
+                            logger.info(f"[stparts] Найден бренд: {brand}")
+                elif cells_count > BRAND_CELL_INDEX:
+                    # Fallback: берём из ячейки [2]
+                    brand_text = await cells.nth(BRAND_CELL_INDEX).inner_text()
+                    brand_text = brand_text.strip()
+                    if brand_text and len(brand_text) > 0 and not re.search(r'[\d₽]', brand_text):
+                        row_brand = brand_text.split('\n')[0].strip()
+                        if brand is None and row_brand:
+                            brand = row_brand
+                            logger.info(f"[stparts] Найден бренд (fallback): {brand}")
 
                 # Если указан фильтр по бренду - пропускаем строки с другим брендом
                 if brand_filter and row_brand:

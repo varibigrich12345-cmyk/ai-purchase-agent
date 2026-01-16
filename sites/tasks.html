@@ -112,6 +112,90 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         }
 
+        /* Свёрнутый заголовок карточки */
+        .card-summary {
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        .card-summary:hover {
+            background: #f8f9fa;
+        }
+
+        .card-summary:active {
+            background: #e9ecef;
+        }
+
+        .card-summary-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .card-summary-id {
+            color: #999;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .card-summary-partnumber {
+            font-weight: 700;
+            color: #333;
+            flex-shrink: 0;
+        }
+
+        .card-summary-brand {
+            color: #667eea;
+            font-size: 12px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .card-summary-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .card-summary-price {
+            font-weight: 700;
+            color: #27ae60;
+            font-size: 15px;
+        }
+
+        .card-summary-price.no-price {
+            color: #999;
+            font-weight: 400;
+        }
+
+        .expand-icon {
+            font-size: 12px;
+            color: #999;
+            transition: transform 0.2s;
+        }
+
+        .card.expanded .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        /* Развёрнутое содержимое */
+        .card-details {
+            display: none;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .card.expanded .card-details {
+            display: block;
+        }
+
         .card-header {
             padding: 12px 16px;
             display: flex;
@@ -303,6 +387,31 @@
                 padding: 12px;
             }
 
+            .card-summary {
+                padding: 10px 12px;
+                gap: 6px;
+            }
+
+            .card-summary-left {
+                gap: 6px;
+            }
+
+            .card-summary-partnumber {
+                font-size: 14px;
+            }
+
+            .card-summary-brand {
+                font-size: 11px;
+            }
+
+            .card-summary-right {
+                gap: 6px;
+            }
+
+            .card-summary-price {
+                font-size: 13px;
+            }
+
             .card-header {
                 flex-direction: column;
                 align-items: flex-start;
@@ -335,7 +444,53 @@
 
         <div class="input-group">
             <input id="partnumber" placeholder="Артикул (например: 1351PK)" autocomplete="off">
-            <input id="search-brand" placeholder="Бренд (например: Peugeot) — необязательно" autocomplete="off">
+            <input id="search-brand" placeholder="Бренд (например: Peugeot) — необязательно" list="brand-list">
+            <datalist id="brand-list">
+                <option value="Peugeot">
+                <option value="Citroen">
+                <option value="Renault">
+                <option value="Toyota">
+                <option value="Honda">
+                <option value="Nissan">
+                <option value="Mazda">
+                <option value="Ford">
+                <option value="Volkswagen">
+                <option value="BMW">
+                <option value="Mercedes">
+                <option value="Audi">
+                <option value="Opel">
+                <option value="Chevrolet">
+                <option value="Hyundai">
+                <option value="Kia">
+                <option value="Mitsubishi">
+                <option value="Suzuki">
+                <option value="Subaru">
+                <option value="Fiat">
+                <option value="Skoda">
+                <option value="Volvo">
+                <option value="Land Rover">
+                <option value="Jeep">
+                <option value="Lada">
+                <option value="Click&Drive">
+                <option value="Bosch">
+                <option value="Valeo">
+                <option value="Denso">
+                <option value="NGK">
+                <option value="Mann">
+                <option value="Mahle">
+                <option value="Febi">
+                <option value="Lemforder">
+                <option value="TRW">
+                <option value="ATE">
+                <option value="Sachs">
+                <option value="LuK">
+                <option value="Gates">
+                <option value="Continental">
+                <option value="SKF">
+                <option value="SNR">
+                <option value="FAG">
+                <option value="INA">
+            </datalist>
             <div class="btn-group">
                 <button onclick="createTask()">Найти</button>
                 <button class="secondary" onclick="loadTasks()">Обновить</button>
@@ -363,8 +518,25 @@
             return `https://stparts.ru/search?pcode=${encodeURIComponent(partnumber)}`;
         }
 
+        // Хранение состояния развёрнутых карточек
+        const expandedCards = new Set();
+
+        function toggleCard(id) {
+            if (expandedCards.has(id)) {
+                expandedCards.delete(id);
+            } else {
+                expandedCards.add(id);
+            }
+            // Перерисовываем только эту карточку
+            const cardEl = document.querySelector(`.card[data-id="${id}"]`);
+            if (cardEl) {
+                cardEl.classList.toggle('expanded', expandedCards.has(id));
+            }
+        }
+
         function renderCard(task) {
             const t = task;
+            const isExpanded = expandedCards.has(t.id);
 
             // Определяем лучшую цену среди сайтов
             const prices = [];
@@ -375,18 +547,28 @@
                 ? prices.reduce((a, b) => a.price < b.price ? a : b).site
                 : null;
 
+            // Бренд для отображения (search_brand или brand)
+            const displayBrand = t.search_brand || t.brand || '';
+
+            // Цена для свёрнутого вида
+            const summaryPrice = t.min_price ? formatPrice(t.min_price) : '—';
+
             // Карточка
             let html = `
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-header-left">
-                            <span class="card-id">#${t.id}</span>
-                            <span class="card-partnumber">${t.partnumber}</span>
-                            ${t.search_brand ? `<span class="card-filter">[${t.search_brand}]</span>` : ''}
-                            ${t.brand ? `<span class="card-brand">(${t.brand})</span>` : ''}
+                <div class="card ${isExpanded ? 'expanded' : ''}" data-id="${t.id}">
+                    <div class="card-summary" onclick="toggleCard(${t.id})">
+                        <div class="card-summary-left">
+                            <span class="card-summary-id">#${t.id}</span>
+                            <span class="card-summary-partnumber">${t.partnumber}</span>
+                            ${displayBrand ? `<span class="card-summary-brand">(${displayBrand})</span>` : ''}
                         </div>
-                        <span class="status-badge status-${t.status}">${t.status}</span>
+                        <div class="card-summary-right">
+                            <span class="status-badge status-${t.status}">${t.status}</span>
+                            <span class="card-summary-price ${t.min_price ? '' : 'no-price'}">${summaryPrice}</span>
+                            <span class="expand-icon">▶</span>
+                        </div>
                     </div>
+                    <div class="card-details">
             `;
 
             // Лучшая цена (если есть)
@@ -412,7 +594,7 @@
                         ${t.zzap_min_price ? formatPrice(t.zzap_min_price) : (t.status === 'DONE' ? 'не найдено' : '—')}
                     </span>
                     ${zzapIsBest ? '<span class="best-tag">ЛУЧШАЯ</span>' : ''}
-                    <a href="${makeZzapLink(t.partnumber)}" target="_blank" class="site-link zzap">Открыть</a>
+                    <a href="${makeZzapLink(t.partnumber)}" target="_blank" class="site-link zzap" onclick="event.stopPropagation()">Открыть</a>
                 </div>
             `;
 
@@ -426,7 +608,7 @@
                         ${t.stparts_min_price ? formatPrice(t.stparts_min_price) : (t.status === 'DONE' ? 'не найдено' : '—')}
                     </span>
                     ${stpartsIsBest ? '<span class="best-tag">ЛУЧШАЯ</span>' : ''}
-                    <a href="${makeStpartsLink(t.partnumber)}" target="_blank" class="site-link stparts">Открыть</a>
+                    <a href="${makeStpartsLink(t.partnumber)}" target="_blank" class="site-link stparts" onclick="event.stopPropagation()">Открыть</a>
                 </div>
             `;
 
@@ -442,7 +624,7 @@
                 `;
             }
 
-            html += `</div>`; // card
+            html += `</div></div>`; // card-details, card
 
             return html;
         }

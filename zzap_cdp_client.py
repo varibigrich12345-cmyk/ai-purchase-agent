@@ -180,11 +180,18 @@ class ZZapCDPClient(BaseBrowserClient):
 
         Args:
             brand_filter: Если указан, учитывать только строки с этим брендом
+
+        Структура таблицы ZZAP (DevExpress grid):
+        - Ячейка [2] содержит БРЕНД (производитель): PEUGEOT CITROEN, Groupe PSA и т.д.
+        - Цены в ячейках с классом 'pricewhitecell' в формате "3 083р."
         """
         prices = []
         brand = None
         filtered_count = 0
         total_count = 0
+
+        # Индекс ячейки с брендом в структуре ZZAP
+        BRAND_CELL_INDEX = 2
 
         try:
             table = self.page.locator("table#ctl00_BodyPlace_SearchGridView_DXMainTable")
@@ -208,16 +215,20 @@ class ZZapCDPClient(BaseBrowserClient):
                     if "Свернуть" in row_text or "Запрошенный номер" in row_text:
                         continue
 
-                    # Извлекаем бренд из первой колонки (обычно это производитель)
+                    # Нужно минимум 10 ячеек для строки с данными
+                    if len(cells) < 10:
+                        continue
+
+                    # Извлекаем бренд из ячейки [2] (PEUGEOT CITROEN)
                     row_brand = None
-                    if len(cells) >= 2:
-                        first_cell = await cells[0].inner_text()
-                        first_cell = first_cell.strip()
-                        # Бренд обычно в первой ячейке, если это не число и не пустая строка
-                        if first_cell and not first_cell.isdigit() and len(first_cell) > 1:
-                            if not any(x in first_cell.lower() for x in ['свернуть', 'развернуть', 'номер', 'р.', '₽']):
-                                row_brand = first_cell.split('\n')[0].strip()
-                                if brand is None:
+                    if len(cells) > BRAND_CELL_INDEX:
+                        brand_cell = await cells[BRAND_CELL_INDEX].inner_text()
+                        brand_cell = brand_cell.strip()
+                        # Проверяем что это текст бренда, а не число или служебная информация
+                        if brand_cell and len(brand_cell) > 1 and not brand_cell.isdigit():
+                            if not any(x in brand_cell.lower() for x in ['свернуть', 'показать', 'р.', '₽']):
+                                row_brand = brand_cell.split('\n')[0].strip()
+                                if brand is None and row_brand:
                                     brand = row_brand
                                     logger.info(f"[zzap] Найден бренд: {brand}")
 
@@ -228,6 +239,7 @@ class ZZapCDPClient(BaseBrowserClient):
                             continue
                         filtered_count += 1
 
+                    # Ищем цены в ячейках
                     for cell in cells:
                         cell_text = await cell.inner_text()
 
@@ -238,7 +250,7 @@ class ZZapCDPClient(BaseBrowserClient):
                                 price_str = match.group(1).replace(" ", "").replace("\xa0", "")
                                 try:
                                     price = float(price_str)
-                                    if 1500 < price < 100000:
+                                    if 100 < price < 500000:
                                         prices.append(price)
                                 except ValueError:
                                     continue
