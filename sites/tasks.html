@@ -29,7 +29,7 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 600px;
             margin: 0 auto;
         }
 
@@ -87,7 +87,7 @@
             font-weight: 600;
             cursor: pointer;
             transition: transform 0.1s, opacity 0.2s;
-            min-height: 48px; /* Удобно для тач */
+            min-height: 48px;
         }
 
         button:active {
@@ -98,130 +98,54 @@
             background: #6c757d;
         }
 
-        /* Таблица */
-        .table-wrapper {
+        /* Карточки */
+        .cards-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .card {
             background: white;
             border-radius: 16px;
-            padding: 12px;
+            overflow: hidden;
             box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
         }
 
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            min-width: 600px;
-            font-size: 14px;
+        .card-header {
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e0e0e0;
         }
 
-        th, td {
-            border: 1px solid #e0e0e0;
-            padding: 10px 8px;
-            text-align: center;
-            white-space: nowrap;
+        .card-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
-        th {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            font-weight: 600;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-
-        /* Колонки сайтов */
-        th.site-zzap {
-            background: #3498db;
-        }
-
-        th.site-stparts {
-            background: #27ae60;
-        }
-
-        /* Цены - крупный шрифт */
-        .price {
-            font-size: 1.1em;
-            font-weight: 700;
-        }
-
-        .price-best {
-            color: #27ae60;
-            font-size: 1.2em;
-        }
-
-        .price-zzap {
-            color: #3498db;
-        }
-
-        .price-stparts {
-            color: #27ae60;
-        }
-
-        /* Статусы строк */
-        tr.DONE {
-            background: #d4edda;
-        }
-
-        tr.ERROR {
-            background: #f8d7da;
-        }
-
-        tr.PENDING {
-            background: #fff3cd;
-        }
-
-        tr.RUNNING {
-            background: #cce5ff;
-            animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
-        }
-
-        /* Ссылки */
-        a {
-            color: white;
-            text-decoration: none;
-            font-weight: 600;
-            padding: 6px 10px;
-            border-radius: 6px;
-            display: inline-block;
+        .card-id {
+            color: #999;
             font-size: 12px;
-            transition: opacity 0.2s;
         }
 
-        a:hover {
-            opacity: 0.85;
+        .card-partnumber {
+            font-weight: 700;
+            font-size: 1.2em;
+            color: #333;
         }
 
-        a.link-zzap {
-            background: #3498db;
+        .card-brand {
+            color: #666;
+            font-size: 13px;
         }
 
-        a.link-stparts {
-            background: #27ae60;
-        }
-
-        .no-data {
-            color: #999;
-            font-style: italic;
-        }
-
-        .empty-state {
-            text-align: center;
-            color: #999;
-            padding: 30px;
-            font-style: italic;
-        }
-
-        /* Статус бейдж */
+        /* Статус бейджи */
         .status-badge {
-            padding: 4px 8px;
-            border-radius: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
             font-size: 11px;
             font-weight: 600;
             text-transform: uppercase;
@@ -230,10 +154,134 @@
         .status-DONE { background: #d4edda; color: #155724; }
         .status-ERROR { background: #f8d7da; color: #721c24; }
         .status-PENDING { background: #fff3cd; color: #856404; }
-        .status-RUNNING { background: #cce5ff; color: #004085; }
+        .status-RUNNING { background: #cce5ff; color: #004085; animation: pulse 1.5s infinite; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* Лучшая цена */
+        .card-best-price {
+            padding: 12px 16px;
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .best-price-label {
+            color: #155724;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .best-price-value {
+            color: #155724;
+            font-weight: 700;
+            font-size: 1.4em;
+        }
+
+        /* Список сайтов */
+        .card-sites {
+            padding: 8px 0;
+        }
+
+        .site-row {
+            display: flex;
+            align-items: center;
+            padding: 10px 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .site-row:last-child {
+            border-bottom: none;
+        }
+
+        .site-row.is-best {
+            background: #f0fff4;
+        }
+
+        .site-icon {
+            width: 24px;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .site-name {
+            width: 80px;
+            font-weight: 600;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .site-name.zzap { color: #3498db; }
+        .site-name.stparts { color: #27ae60; }
+
+        .site-price {
+            flex: 1;
+            font-weight: 700;
+            font-size: 15px;
+            color: #333;
+        }
+
+        .site-price.is-best {
+            color: #27ae60;
+        }
+
+        .site-price.not-found {
+            color: #999;
+            font-weight: 400;
+            font-style: italic;
+        }
+
+        .site-link {
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            text-decoration: none;
+            color: white;
+            transition: opacity 0.2s;
+        }
+
+        .site-link:hover {
+            opacity: 0.85;
+        }
+
+        .site-link.zzap { background: #3498db; }
+        .site-link.stparts { background: #27ae60; }
+
+        .best-tag {
+            background: #27ae60;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        /* Средняя цена */
+        .card-footer {
+            padding: 8px 16px;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #666;
+        }
+
+        /* Пустое состояние */
+        .empty-state {
+            text-align: center;
+            color: rgba(255,255,255,0.9);
+            padding: 40px 20px;
+            font-size: 16px;
+        }
 
         /* Мобильная адаптация */
-        @media (max-width: 768px) {
+        @media (max-width: 480px) {
             body {
                 padding: 8px;
             }
@@ -246,64 +294,28 @@
                 padding: 12px;
             }
 
-            input {
-                padding: 12px 14px;
+            .card-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
             }
 
-            button {
-                padding: 12px;
-                font-size: 14px;
+            .card-partnumber {
+                font-size: 1.1em;
             }
 
-            table {
+            .site-name {
+                width: 70px;
                 font-size: 13px;
             }
 
-            th, td {
-                padding: 8px 6px;
+            .site-price {
+                font-size: 14px;
             }
 
-            .price {
-                font-size: 1em;
-            }
-
-            a {
-                padding: 5px 8px;
+            .site-link {
+                padding: 5px 10px;
                 font-size: 11px;
-            }
-        }
-
-        /* Очень маленькие экраны */
-        @media (max-width: 480px) {
-            h2 {
-                font-size: 1.2rem;
-            }
-
-            h3 {
-                font-size: 1rem;
-            }
-
-            .btn-group {
-                flex-direction: column;
-            }
-
-            table {
-                font-size: 12px;
-            }
-        }
-
-        /* Подсказка о скролле */
-        .scroll-hint {
-            display: none;
-            text-align: center;
-            color: rgba(255,255,255,0.8);
-            font-size: 12px;
-            margin-bottom: 8px;
-        }
-
-        @media (max-width: 768px) {
-            .scroll-hint {
-                display: block;
             }
         }
     </style>
@@ -312,44 +324,25 @@
     <div class="container">
         <h2>AI Purchase Agent</h2>
 
-        <h3>Добавить задачу</h3>
         <div class="input-group">
             <input id="partnumber" placeholder="Артикул (например: 1351PK)" autocomplete="off">
             <div class="btn-group">
-                <button onclick="createTask()">Добавить</button>
+                <button onclick="createTask()">Найти</button>
                 <button class="secondary" onclick="loadTasks()">Обновить</button>
             </div>
         </div>
 
-        <h3>История поиска</h3>
-        <div class="scroll-hint">Прокрутите таблицу вправо</div>
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Артикул</th>
-                        <th>Бренд</th>
-                        <th>Статус</th>
-                        <th class="site-zzap">ZZAP</th>
-                        <th class="site-stparts">STparts</th>
-                        <th>Min</th>
-                        <th>Avg</th>
-                    </tr>
-                </thead>
-                <tbody id="tasks-body">
-                    <tr><td colspan="8" class="empty-state">Загрузка...</td></tr>
-                </tbody>
-            </table>
+        <div id="tasks-container" class="cards-container">
+            <div class="empty-state">Загрузка...</div>
         </div>
     </div>
 
     <script>
         const API = '/api/tasks';
 
-        function formatPrice(price, cssClass = '') {
-            if (!price) return '<span class="no-data">-</span>';
-            return `<span class="price ${cssClass}">${price.toLocaleString('ru-RU')} ₽</span>`;
+        function formatPrice(price) {
+            if (!price) return null;
+            return price.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' ₽';
         }
 
         function makeZzapLink(partnumber) {
@@ -360,77 +353,101 @@
             return `https://stparts.ru/search?pcode=${encodeURIComponent(partnumber)}`;
         }
 
+        function renderCard(task) {
+            const t = task;
+
+            // Определяем лучшую цену среди сайтов
+            const prices = [];
+            if (t.zzap_min_price) prices.push({ site: 'zzap', price: t.zzap_min_price });
+            if (t.stparts_min_price) prices.push({ site: 'stparts', price: t.stparts_min_price });
+
+            const bestSite = prices.length > 0
+                ? prices.reduce((a, b) => a.price < b.price ? a : b).site
+                : null;
+
+            // Карточка
+            let html = `
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <span class="card-id">#${t.id}</span>
+                            <span class="card-partnumber">${t.partnumber}</span>
+                            ${t.brand ? `<span class="card-brand">(${t.brand})</span>` : ''}
+                        </div>
+                        <span class="status-badge status-${t.status}">${t.status}</span>
+                    </div>
+            `;
+
+            // Лучшая цена (если есть)
+            if (t.min_price) {
+                html += `
+                    <div class="card-best-price">
+                        <span class="best-price-label">Лучшая цена</span>
+                        <span class="best-price-value">${formatPrice(t.min_price)}</span>
+                    </div>
+                `;
+            }
+
+            // Список сайтов
+            html += `<div class="card-sites">`;
+
+            // ZZAP
+            const zzapIsBest = bestSite === 'zzap';
+            html += `
+                <div class="site-row ${zzapIsBest ? 'is-best' : ''}">
+                    <span class="site-icon">🔵</span>
+                    <span class="site-name zzap">ZZAP</span>
+                    <span class="site-price ${t.zzap_min_price ? (zzapIsBest ? 'is-best' : '') : 'not-found'}">
+                        ${t.zzap_min_price ? formatPrice(t.zzap_min_price) : (t.status === 'DONE' ? 'не найдено' : '—')}
+                    </span>
+                    ${zzapIsBest ? '<span class="best-tag">ЛУЧШАЯ</span>' : ''}
+                    <a href="${makeZzapLink(t.partnumber)}" target="_blank" class="site-link zzap">Открыть</a>
+                </div>
+            `;
+
+            // STparts
+            const stpartsIsBest = bestSite === 'stparts';
+            html += `
+                <div class="site-row ${stpartsIsBest ? 'is-best' : ''}">
+                    <span class="site-icon">🟢</span>
+                    <span class="site-name stparts">STparts</span>
+                    <span class="site-price ${t.stparts_min_price ? (stpartsIsBest ? 'is-best' : '') : 'not-found'}">
+                        ${t.stparts_min_price ? formatPrice(t.stparts_min_price) : (t.status === 'DONE' ? 'не найдено' : '—')}
+                    </span>
+                    ${stpartsIsBest ? '<span class="best-tag">ЛУЧШАЯ</span>' : ''}
+                    <a href="${makeStpartsLink(t.partnumber)}" target="_blank" class="site-link stparts">Открыть</a>
+                </div>
+            `;
+
+            html += `</div>`; // card-sites
+
+            // Футер со средней ценой
+            if (t.avg_price) {
+                html += `
+                    <div class="card-footer">
+                        <span>Средняя цена:</span>
+                        <span>${formatPrice(t.avg_price)}</span>
+                    </div>
+                `;
+            }
+
+            html += `</div>`; // card
+
+            return html;
+        }
+
         async function loadTasks() {
             try {
                 const res = await fetch(API);
                 const tasks = await res.json();
-                const tbody = document.getElementById('tasks-body');
+                const container = document.getElementById('tasks-container');
 
                 if (tasks.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Пока нет задач</td></tr>';
+                    container.innerHTML = '<div class="empty-state">Пока нет задач. Введите артикул выше.</div>';
                     return;
                 }
 
-                tbody.innerHTML = '';
-
-                for (const t of tasks) {
-                    const tr = document.createElement('tr');
-                    tr.className = t.status;
-
-                    // Бренд
-                    const brandCell = t.brand ? `<strong>${t.brand}</strong>` : '<span class="no-data">-</span>';
-
-                    // Статус бейдж
-                    const statusBadge = `<span class="status-badge status-${t.status}">${t.status}</span>`;
-
-                    // ZZAP колонка - цена + ссылка
-                    let zzapCell = '';
-                    if (t.zzap_min_price) {
-                        zzapCell = `
-                            ${formatPrice(t.zzap_min_price, 'price-zzap')}<br>
-                            <a href="${makeZzapLink(t.partnumber)}" target="_blank" class="link-zzap">Открыть</a>
-                        `;
-                    } else if (t.status === 'DONE') {
-                        zzapCell = '<span class="no-data">Не найдено</span>';
-                    } else {
-                        zzapCell = '<span class="no-data">-</span>';
-                    }
-
-                    // STparts колонка - цена + ссылка
-                    let stpartsCell = '';
-                    if (t.stparts_min_price) {
-                        stpartsCell = `
-                            ${formatPrice(t.stparts_min_price, 'price-stparts')}<br>
-                            <a href="${makeStpartsLink(t.partnumber)}" target="_blank" class="link-stparts">Открыть</a>
-                        `;
-                    } else if (t.status === 'DONE') {
-                        stpartsCell = '<span class="no-data">Не найдено</span>';
-                    } else {
-                        stpartsCell = '<span class="no-data">-</span>';
-                    }
-
-                    // Min цена (лучшая) - зелёная
-                    const minPrice = t.min_price
-                        ? formatPrice(t.min_price, 'price-best')
-                        : '<span class="no-data">-</span>';
-
-                    // Avg цена
-                    const avgPrice = t.avg_price
-                        ? formatPrice(t.avg_price, '')
-                        : '<span class="no-data">-</span>';
-
-                    tr.innerHTML = `
-                        <td>${t.id}</td>
-                        <td><strong>${t.partnumber}</strong></td>
-                        <td>${brandCell}</td>
-                        <td>${statusBadge}</td>
-                        <td>${zzapCell}</td>
-                        <td>${stpartsCell}</td>
-                        <td>${minPrice}</td>
-                        <td>${avgPrice}</td>
-                    `;
-                    tbody.appendChild(tr);
-                }
+                container.innerHTML = tasks.map(renderCard).join('');
             } catch (e) {
                 console.error('loadTasks error:', e);
             }
