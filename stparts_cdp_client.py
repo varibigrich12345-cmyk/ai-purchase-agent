@@ -1,0 +1,265 @@
+"""
+CDP клиент для stparts.ru - подключается к уже запущенному Chrome.
+
+Использование:
+1. Запустите start_chrome_debug.bat
+2. async with STPartsCDPClient() as client:
+       result = await client.search_part("12345")
+"""
+
+import asyncio
+import logging
+import re
+from typing import Dict, Any, List
+
+from base_browser_client import BaseBrowserClient
+from config import STPARTS_LOGIN, STPARTS_PASSWORD
+
+logger = logging.getLogger(__name__)
+
+
+class STPartsCDPClient(BaseBrowserClient):
+    """CDP клиент для stparts.ru с авторизацией и keep-alive."""
+
+    SITE_NAME = "stparts"
+    BASE_URL = "https://stparts.ru"
+
+    async def check_auth(self) -> bool:
+        """Проверить, авторизован ли пользователь на stparts.ru."""
+        try:
+            # Переходим на страницу клиентов для проверки
+            clients_url = f"{self.BASE_URL}/clients"
+            if clients_url not in self.page.url:
+                await self.page.goto(clients_url, wait_until='domcontentloaded', timeout=30000)
+                await self.page.wait_for_timeout(2000)
+
+            # Проверяем признаки авторизации
+            auth_indicators = [
+                'text="Выход"',
+                'text="Выйти"',
+                'text="выход"',
+                '[href*="logout"]',
+                'text="Личный кабинет"',
+            ]
+
+            for selector in auth_indicators:
+                try:
+                    if await self.page.locator(selector).count() > 0:
+                        logger.info(f"[stparts] Найден признак авторизации: {selector}")
+                        return True
+                except:
+                    continue
+
+            # Если есть форма логина (поле пароля видно) - не авторизованы
+            if await self.page.locator('input[name="pass"]').count() > 0:
+                return False
+
+            return False
+
+        except Exception as e:
+            logger.error(f"[stparts] Ошибка проверки авторизации: {e}")
+            return False
+
+    async def auto_login(self) -> bool:
+        """Выполнить автоматический логин на stparts.ru."""
+        try:
+            logger.info("[stparts] Начинаю автологин...")
+
+            # Переходим на страницу клиентов (там форма входа)
+            login_url = f"{self.BASE_URL}/clients"
+            await self.page.goto(login_url, wait_until='networkidle', timeout=60000)
+            await self.page.wait_for_timeout(2000)
+
+            # Заполняем логин (input[name="login"])
+            login_field = 'input[name="login"]'
+            if await self.page.locator(login_field).count() > 0:
+                await self.page.fill(login_field, STPARTS_LOGIN)
+                logger.info(f"[stparts] Логин введён: {STPARTS_LOGIN}")
+            else:
+                logger.error("[stparts] Поле логина не найдено")
+                return False
+
+            # Заполняем пароль (input[name="pass"])
+            password_field = 'input[name="pass"]'
+            if await self.page.locator(password_field).count() > 0:
+                await self.page.fill(password_field, STPARTS_PASSWORD)
+            else:
+                logger.error("[stparts] Поле пароля не найдено")
+                return False
+
+            # Нажимаем кнопку входа (submit рядом с формой)
+            try:
+                # Ищем submit кнопку в форме авторизации
+                await self.page.locator('input[name="pass"]').press("Enter")
+            except:
+                try:
+                    await self.page.click('input[type="submit"][name="go"]')
+                except:
+                    logger.error("[stparts] Кнопка входа не найдена")
+                    return False
+
+            # Ждём загрузки
+            await self.page.wait_for_timeout(5000)
+
+            # Проверяем успешность - должны увидеть признаки авторизации
+            if await self.check_auth():
+                logger.info("[stparts] Авторизация успешна!")
+                return True
+            else:
+                logger.error("[stparts] Авторизация не удалась")
+                return False
+
+        except Exception as e:
+            logger.error(f"[stparts] Ошибка автологина: {e}")
+            return False
+
+    async def keep_alive(self) -> None:
+        """Специфичный keep-alive для stparts.ru."""
+        try:
+            logger.debug("[stparts] Keep-alive: проверка сессии...")
+
+            # Делаем лёгкий запрос к API или главной
+            await self.page.evaluate('''
+                fetch("/api/user/current", {method: "GET", credentials: "include"})
+                    .catch(() => fetch("/", {method: "HEAD", credentials: "include"}))
+                    .catch(() => {});
+            ''')
+
+            logger.debug("[stparts] Keep-alive OK")
+
+        except Exception as e:
+            logger.warning(f"[stparts] Keep-alive ошибка: {e}")
+
+    # ========== Методы поиска ==========
+
+    async def search_part(self, partnumber: str) -> Dict[str, Any]:
+        """Поиск запчасти по артикулу."""
+        try:
+            # Переходим на страницу клиентов где есть поиск
+            await self.page.goto(f"{self.BASE_URL}/clients", wait_until='networkidle', timeout=60000)
+            await self.page.wait_for_timeout(2000)
+
+            # Ищем поле поиска по артикулу (input[name="pcode"])
+            search_field = 'input[name="pcode"]'
+            if await self.page.locator(search_field).count() > 0:
+                await self.page.fill(search_field, partnumber)
+                await self.page.press(search_field, "Enter")
+            else:
+                return {
+                    'partnumber': partnumber,
+                    'status': 'error',
+                    'prices': {'min': None, 'avg': None},
+                    'error': 'Поле поиска не найдено'
+                }
+
+            logger.info(f"[stparts] Поиск: {partnumber}")
+            await self.page.wait_for_timeout(5000)
+
+            # Пробуем нажать "Цены и аналоги"
+            try:
+                link = self.page.get_by_role("link", name="Цены и аналоги").first
+                if await link.is_visible(timeout=5000):
+                    await link.click()
+                    await self.page.wait_for_timeout(3000)
+                    logger.info("[stparts] Перешли на страницу цен")
+            except:
+                logger.debug("[stparts] Ссылка 'Цены и аналоги' не найдена")
+
+            # Извлекаем цены
+            prices = await self._extract_prices()
+
+            if not prices:
+                return {
+                    'partnumber': partnumber,
+                    'status': 'not_found',
+                    'prices': {'min': None, 'avg': None},
+                    'url': self.page.url
+                }
+
+            return {
+                'partnumber': partnumber,
+                'status': 'success',
+                'prices': {
+                    'min': min(prices),
+                    'avg': round(sum(prices) / len(prices), 2)
+                },
+                'url': self.page.url
+            }
+
+        except Exception as e:
+            logger.error(f"[stparts] Ошибка поиска: {e}")
+            return {
+                'partnumber': partnumber,
+                'status': 'error',
+                'prices': {'min': None, 'avg': None},
+                'error': str(e)
+            }
+
+    async def search_part_with_retry(self, partnumber: str, max_retries: int = 3) -> Dict[str, Any]:
+        """Поиск с повторными попытками."""
+        for attempt in range(1, max_retries + 1):
+            logger.info(f"[stparts] Попытка {attempt}/{max_retries}: {partnumber}")
+
+            result = await self.search_part(partnumber)
+
+            if result.get('status') == 'success' and result.get('prices', {}).get('min'):
+                return result
+
+            if attempt < max_retries:
+                await asyncio.sleep(2 * attempt)
+
+        return result
+
+    async def _extract_prices(self) -> List[float]:
+        """Извлечь цены из таблицы результатов."""
+        prices = []
+
+        try:
+            table = self.page.locator("#searchResultsTable")
+            await table.wait_for(state="visible", timeout=10000)
+
+            rows = table.locator("tbody tr")
+            count = await rows.count()
+            logger.info(f"[stparts] Найдено {count} строк в таблице")
+
+            for i in range(count):
+                row_text = await rows.nth(i).inner_text()
+
+                # Ищем цену в формате "141,40 ₽" или "1 234,56 ₽"
+                match = re.search(r"([\d\s]+[,.]?\d*)\s*₽", row_text)
+                if match:
+                    try:
+                        price_str = match.group(1).replace(" ", "").replace("\xa0", "").replace(",", ".")
+                        val = float(price_str)
+                        if 10 < val < 500000:
+                            prices.append(val)
+                    except ValueError:
+                        pass
+
+        except Exception as e:
+            logger.debug(f"[stparts] Ошибка извлечения цен: {e}")
+
+        unique_prices = list(set(prices))
+        if unique_prices:
+            logger.info(f"[stparts] Найдено {len(unique_prices)} уникальных цен: {sorted(unique_prices)[:5]}...")
+        return unique_prices
+
+
+# ========== Тест ==========
+
+async def test_client():
+    """Тест CDP клиента."""
+    logging.basicConfig(level=logging.INFO)
+
+    async with STPartsCDPClient() as client:
+        print(f"Подключено: {client.is_connected}")
+        print(f"Авторизован: {client.is_logged_in}")
+        print(f"URL: {client.url}")
+
+        # Тестовый поиск
+        result = await client.search_part("21126100603082")
+        print(f"Результат: {result}")
+
+
+if __name__ == "__main__":
+    asyncio.run(test_client())
