@@ -270,21 +270,29 @@ class TrastCDPClient(BaseBrowserClient):
                 logger.error("[trast] Поле пароля не найдено")
                 return False
 
-            # Нажимаем кнопку входа
+            # Нажимаем кнопку входа в форме логина (не в форме поиска!)
+            # Ищем кнопку внутри формы с полем логина
             submit_selectors = [
-                'button[type="submit"]',
-                'input[type="submit"]',
-                'button:has-text("Войти")',
-                'button:has-text("Вход")',
-                '.btn-login',
-                '[type="submit"]',
+                # Кнопки внутри формы с полем user_login
+                'form:has(input[name="user_login"]) button[type="submit"]',
+                'form:has(input[name="user_login"]) input[type="submit"]',
+                'form:has(input[name="user_login"]) button:has-text("Войти")',
+                # Кнопки с текстом "Войти" (но не поиск)
+                'button:has-text("Войти"):not(:has-text("Поиск"))',
+                'input[value="Войти"]',
+                'input[value="Вход"]',
+                # Общие селекторы как fallback
+                '.login-form button[type="submit"]',
+                '.auth-form button[type="submit"]',
+                '#login-form button[type="submit"]',
             ]
 
             submit_clicked = False
             for selector in submit_selectors:
                 try:
-                    if await self.page.locator(selector).count() > 0:
-                        await self.page.click(selector)
+                    locator = self.page.locator(selector)
+                    if await locator.count() > 0:
+                        await locator.first.click()
                         logger.info(f"[trast] Нажата кнопка: {selector}")
                         submit_clicked = True
                         break
@@ -293,10 +301,10 @@ class TrastCDPClient(BaseBrowserClient):
                     continue
 
             if not submit_clicked:
-                logger.error("[trast] Кнопка входа не найдена")
-                # Попробуем нажать Enter
-                await self.page.keyboard.press("Enter")
-                logger.info("[trast] Нажат Enter вместо кнопки")
+                # Попробуем нажать Enter в поле пароля
+                logger.warning("[trast] Кнопка входа не найдена, нажимаем Enter в поле пароля")
+                await self.page.locator('input[type="password"]').press("Enter")
+                logger.info("[trast] Нажат Enter в поле пароля")
 
             # Ждём загрузки
             await self.page.wait_for_timeout(5000)
