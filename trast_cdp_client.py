@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 
 
 class TrastCDPClient(BaseBrowserClient):
-    """CDP клиент для trast.ru с авторизацией и keep-alive."""
+    """CDP клиент для trast-zapchast.ru с авторизацией и keep-alive."""
 
     SITE_NAME = "trast"
-    BASE_URL = "https://trast.ru"
+    BASE_URL = "https://trast-zapchast.ru"
 
     async def check_auth(self) -> bool:
         """Проверить, авторизован ли пользователь на trast.ru."""
@@ -67,7 +67,7 @@ class TrastCDPClient(BaseBrowserClient):
             logger.info("[trast] Начинаю автологин...")
 
             # Переходим на страницу входа
-            login_url = f"{self.BASE_URL}/login"
+            login_url = f"{self.BASE_URL}/login/"
             await self.page.goto(login_url, wait_until='networkidle', timeout=60000)
             await self.page.wait_for_timeout(2000)
 
@@ -170,7 +170,7 @@ class TrastCDPClient(BaseBrowserClient):
         """
         try:
             # Формируем URL поиска
-            search_url = f"{self.BASE_URL}/search?q={partnumber}"
+            search_url = f"{self.BASE_URL}/search/?query={partnumber}"
             await self.page.goto(search_url, wait_until='networkidle', timeout=60000)
             await self.page.wait_for_timeout(3000)
 
