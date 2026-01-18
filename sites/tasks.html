@@ -530,6 +530,8 @@
         const brandInput = document.getElementById('search-brand');
         const brandDropdown = document.getElementById('brand-dropdown');
         let highlightedIndex = -1;
+        let dropdownOpen = false;
+        let preventClose = false;
 
         function showBrandDropdown(filter = '') {
             const filterLower = filter.toLowerCase();
@@ -538,7 +540,7 @@
                 : BRANDS;
 
             if (filtered.length === 0) {
-                brandDropdown.classList.remove('show');
+                closeBrandDropdown();
                 return;
             }
 
@@ -547,103 +549,126 @@
                 <div class="autocomplete-item" data-value="${brand}" data-index="${idx}">${brand}</div>
             `).join('');
 
-            // Добавляем обработчики для каждого элемента
-            brandDropdown.querySelectorAll('.autocomplete-item').forEach(item => {
-                // Touch события для мобильных
-                item.addEventListener('touchstart', handleItemTouch, { passive: true });
-                item.addEventListener('touchend', handleItemSelect);
-                // Mouse события для десктопа
-                item.addEventListener('mousedown', handleItemSelect);
-            });
-
             brandDropdown.classList.add('show');
+            dropdownOpen = true;
         }
 
-        function hideBrandDropdown() {
-            setTimeout(() => {
-                brandDropdown.classList.remove('show');
-            }, 150); // Небольшая задержка чтобы успел сработать клик/тач
+        function closeBrandDropdown() {
+            if (preventClose) return;
+            brandDropdown.classList.remove('show');
+            dropdownOpen = false;
         }
 
-        function handleItemTouch(e) {
-            // Подсветка при касании
-            this.classList.add('highlighted');
+        function selectBrand(value) {
+            brandInput.value = value;
+            closeBrandDropdown();
         }
 
-        function handleItemSelect(e) {
+        // Делегирование событий на dropdown контейнер
+        brandDropdown.addEventListener('mousedown', (e) => {
+            // Предотвращаем потерю фокуса input при клике на dropdown
             e.preventDefault();
-            e.stopPropagation();
-            const value = this.getAttribute('data-value');
-            if (value) {
-                brandInput.value = value;
-                brandDropdown.classList.remove('show');
-                brandInput.blur();
+            const item = e.target.closest('.autocomplete-item');
+            if (item) {
+                selectBrand(item.getAttribute('data-value'));
             }
-        }
+        });
 
-        function selectHighlighted() {
-            const items = brandDropdown.querySelectorAll('.autocomplete-item');
-            if (highlightedIndex >= 0 && highlightedIndex < items.length) {
-                brandInput.value = items[highlightedIndex].getAttribute('data-value');
-                brandDropdown.classList.remove('show');
+        // Touch события - используем делегирование
+        brandDropdown.addEventListener('touchstart', (e) => {
+            preventClose = true; // Не закрывать при blur
+            const item = e.target.closest('.autocomplete-item');
+            if (item) {
+                item.classList.add('highlighted');
             }
-        }
+        }, { passive: true });
 
-        function updateHighlight(newIndex) {
-            const items = brandDropdown.querySelectorAll('.autocomplete-item');
-            if (items.length === 0) return;
-
-            // Убираем старую подсветку
-            items.forEach(item => item.classList.remove('highlighted'));
-
-            // Нормализуем индекс
-            if (newIndex < 0) newIndex = items.length - 1;
-            if (newIndex >= items.length) newIndex = 0;
-
-            highlightedIndex = newIndex;
-            items[highlightedIndex].classList.add('highlighted');
-            items[highlightedIndex].scrollIntoView({ block: 'nearest' });
-        }
+        brandDropdown.addEventListener('touchend', (e) => {
+            const item = e.target.closest('.autocomplete-item');
+            if (item) {
+                e.preventDefault();
+                selectBrand(item.getAttribute('data-value'));
+            }
+            preventClose = false;
+        });
 
         // События для поля ввода бренда
-        brandInput.addEventListener('focus', () => showBrandDropdown(brandInput.value));
-        brandInput.addEventListener('input', () => showBrandDropdown(brandInput.value));
-        brandInput.addEventListener('blur', hideBrandDropdown);
+        brandInput.addEventListener('focus', () => {
+            showBrandDropdown(brandInput.value);
+        });
+
+        brandInput.addEventListener('click', () => {
+            if (!dropdownOpen) {
+                showBrandDropdown(brandInput.value);
+            }
+        });
+
+        brandInput.addEventListener('input', () => {
+            showBrandDropdown(brandInput.value);
+        });
+
+        brandInput.addEventListener('blur', () => {
+            // Задержка чтобы успел сработать клик по dropdown
+            setTimeout(() => {
+                if (!preventClose) {
+                    closeBrandDropdown();
+                }
+            }, 200);
+        });
 
         brandInput.addEventListener('keydown', (e) => {
-            if (!brandDropdown.classList.contains('show')) return;
+            if (!dropdownOpen) {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    showBrandDropdown(brandInput.value);
+                    return;
+                }
+                return;
+            }
+
+            const items = brandDropdown.querySelectorAll('.autocomplete-item');
 
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                updateHighlight(highlightedIndex + 1);
+                highlightedIndex = Math.min(highlightedIndex + 1, items.length - 1);
+                updateHighlight(items);
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                updateHighlight(highlightedIndex - 1);
+                highlightedIndex = Math.max(highlightedIndex - 1, 0);
+                updateHighlight(items);
             } else if (e.key === 'Enter') {
                 e.preventDefault();
-                if (highlightedIndex >= 0) {
-                    selectHighlighted();
+                if (highlightedIndex >= 0 && items[highlightedIndex]) {
+                    selectBrand(items[highlightedIndex].getAttribute('data-value'));
                 } else {
-                    brandDropdown.classList.remove('show');
+                    closeBrandDropdown();
                     createTask();
                 }
             } else if (e.key === 'Escape') {
-                brandDropdown.classList.remove('show');
+                closeBrandDropdown();
             }
         });
 
-        // Закрытие dropdown при клике вне
+        function updateHighlight(items) {
+            items.forEach((item, idx) => {
+                item.classList.toggle('highlighted', idx === highlightedIndex);
+            });
+            if (items[highlightedIndex]) {
+                items[highlightedIndex].scrollIntoView({ block: 'nearest' });
+            }
+        }
+
+        // Закрытие dropdown при клике/тапе вне
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.autocomplete-wrapper')) {
-                brandDropdown.classList.remove('show');
+                closeBrandDropdown();
             }
         });
 
-        document.addEventListener('touchstart', (e) => {
+        document.addEventListener('touchend', (e) => {
             if (!e.target.closest('.autocomplete-wrapper')) {
-                brandDropdown.classList.remove('show');
+                closeBrandDropdown();
             }
-        }, { passive: true });
+        });
 
         function formatPrice(price) {
             if (!price) return null;
