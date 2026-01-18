@@ -538,14 +538,17 @@ class TrastCDPClient(BaseBrowserClient):
 
             # Если не нашли в таблице, ищем цены в тексте страницы
             if not prices:
+                # Получаем чистый текст страницы (без HTML)
+                plain_text = await self.page.inner_text('body')
                 # Ищем все цены на странице
-                all_prices = re.findall(r"([\d\s]{1,10}[,.]?\d{0,2})\s*₽", page_text)
+                all_prices = re.findall(r"([\d\s\xa0]{1,15})\s*₽", plain_text)
                 for price_str in all_prices:
                     try:
-                        price_str = price_str.replace(" ", "").replace("\xa0", "").replace(",", ".")
-                        val = float(price_str)
-                        if 100 < val < 500000:  # Разумный диапазон цен
-                            prices.append(val)
+                        price_str = price_str.replace(" ", "").replace("\xa0", "").replace(",", ".").strip()
+                        if price_str:
+                            val = float(price_str)
+                            if 100 < val < 500000:  # Разумный диапазон цен
+                                prices.append(val)
                     except ValueError:
                         pass
 
