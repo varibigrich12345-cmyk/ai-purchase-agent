@@ -8,6 +8,10 @@ BASEDIR = Path(__file__).resolve().parent
 STPARTS_LOGIN = os.getenv("STPARTS_LOGIN", "89297748866@mail.ru")
 STPARTS_PASSWORD = os.getenv("STPARTS_PASSWORD", "SSSsss@12345678")
 
+# trast.ru credentials
+TRAST_LOGIN = os.getenv("TRAST_LOGIN", "")
+TRAST_PASSWORD = os.getenv("TRAST_PASSWORD", "")
+
 # Database - use env var for Docker, fallback to local for development
 DB_PATH = Path(os.getenv("DATABASE_PATH", str(BASEDIR / "tasks.db")))
 

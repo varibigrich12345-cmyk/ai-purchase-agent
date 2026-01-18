@@ -312,6 +312,7 @@
 
         .site-name.zzap { color: #3498db; }
         .site-name.stparts { color: #27ae60; }
+        .site-name.trast { color: #e67e22; }
 
         .site-price {
             flex: 1;
@@ -346,6 +347,7 @@
 
         .site-link.zzap { background: #3498db; }
         .site-link.stparts { background: #27ae60; }
+        .site-link.trast { background: #e67e22; }
 
         .best-tag {
             background: #27ae60;
@@ -683,6 +685,10 @@
             return `https://stparts.ru/search?pcode=${encodeURIComponent(partnumber)}`;
         }
 
+        function makeTrastLink(partnumber) {
+            return `https://trast.ru/search?q=${encodeURIComponent(partnumber)}`;
+        }
+
         // Хранение состояния развёрнутых карточек
         const expandedCards = new Set();
 
@@ -707,6 +713,7 @@
             const prices = [];
             if (t.zzap_min_price) prices.push({ site: 'zzap', price: t.zzap_min_price });
             if (t.stparts_min_price) prices.push({ site: 'stparts', price: t.stparts_min_price });
+            if (t.trast_min_price) prices.push({ site: 'trast', price: t.trast_min_price });
 
             const bestSite = prices.length > 0
                 ? prices.reduce((a, b) => a.price < b.price ? a : b).site
@@ -774,6 +781,20 @@
                     </span>
                     ${stpartsIsBest ? '<span class="best-tag">ЛУЧШАЯ</span>' : ''}
                     <a href="${makeStpartsLink(t.partnumber)}" target="_blank" class="site-link stparts" onclick="event.stopPropagation()">Открыть</a>
+                </div>
+            `;
+
+            // Trast
+            const trastIsBest = bestSite === 'trast';
+            html += `
+                <div class="site-row ${trastIsBest ? 'is-best' : ''}">
+                    <span class="site-icon">🟠</span>
+                    <span class="site-name trast">Trast</span>
+                    <span class="site-price ${t.trast_min_price ? (trastIsBest ? 'is-best' : '') : 'not-found'}">
+                        ${t.trast_min_price ? formatPrice(t.trast_min_price) : (t.status === 'DONE' ? 'не найдено' : '—')}
+                    </span>
+                    ${trastIsBest ? '<span class="best-tag">ЛУЧШАЯ</span>' : ''}
+                    <a href="${makeTrastLink(t.partnumber)}" target="_blank" class="site-link trast" onclick="event.stopPropagation()">Открыть</a>
                 </div>
             `;
 

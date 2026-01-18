@@ -19,6 +19,8 @@ services:
       - DATABASE_PATH=/app/data/tasks.db
       - STPARTS_LOGIN=${STPARTS_LOGIN}
       - STPARTS_PASSWORD=${STPARTS_PASSWORD}
+      - TRAST_LOGIN=${TRAST_LOGIN}
+      - TRAST_PASSWORD=${TRAST_PASSWORD}
     env_file:
       - .env
     command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -44,6 +46,8 @@ services:
       - DATABASE_PATH=/app/data/tasks.db
       - STPARTS_LOGIN=${STPARTS_LOGIN}
       - STPARTS_PASSWORD=${STPARTS_PASSWORD}
+      - TRAST_LOGIN=${TRAST_LOGIN}
+      - TRAST_PASSWORD=${TRAST_PASSWORD}
       - ZZAP_MIN_PRICE=${ZZAP_MIN_PRICE:-2000}
       - ZZAP_MAX_PRICE=${ZZAP_MAX_PRICE:-50000}
       - STPARTS_MIN_PRICE=${STPARTS_MIN_PRICE:-2000}

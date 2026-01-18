@@ -1,7 +1,7 @@
 ﻿"""
 Worker для обработки задач поиска автозапчастей.
-Запускает ZZAP и STparts последовательно.
-Версия: 3.0 - CDP клиенты (подключение к Chrome через remote debugging)
+Запускает ZZAP, STparts и Trast последовательно.
+Версия: 3.1 - CDP клиенты + Trast
 
 Требования: Запустите start_chrome_debug.bat перед запуском worker.
 """
@@ -22,6 +22,7 @@ sys.path.insert(0, str(BASEDIR))
 import sqlite3
 from zzap_cdp_client import ZZapCDPClient
 from stparts_cdp_client import STPartsCDPClient
+from trast_cdp_client import TrastCDPClient
 from config import DB_PATH
 
 logging.basicConfig(
@@ -42,7 +43,7 @@ def get_db_connection():
 async def process_tasks():
     """
     Главный цикл обработки задач.
-    Последовательно запускает ZZAP и STparts для каждой задачи.
+    Последовательно запускает ZZAP, STparts и Trast для каждой задачи.
     """
     logger.info("🔥 Worker запущен!")
     logger.info(f"📁 База данных: {DBPATH}")
@@ -52,10 +53,11 @@ async def process_tasks():
     # Подключаемся к Chrome через CDP
     logger.info("🔧 Подключение к Chrome CDP...")
 
-    async with ZZapCDPClient() as zzap_client, STPartsCDPClient() as stparts_client:
+    async with ZZapCDPClient() as zzap_client, STPartsCDPClient() as stparts_client, TrastCDPClient() as trast_client:
         logger.info("  ✅ ZZAP клиент подключён")
         logger.info("  ✅ STparts клиент подключён")
-        logger.info("✅ Оба клиента готовы к работе!")
+        logger.info("  ✅ Trast клиент подключён")
+        logger.info("✅ Все клиенты готовы к работе!")
 
         while True:
             conn = None
@@ -84,15 +86,19 @@ async def process_tasks():
                     )
                     conn.commit()
 
-                    logger.info("🔵 [1/2] Поиск на ZZAP.ru...")
+                    logger.info("🔵 [1/3] Поиск на ZZAP.ru...")
                     zzap_result = await zzap_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
 
-                    logger.info("🟢 [2/2] Поиск на STparts.ru...")
+                    logger.info("🟢 [2/3] Поиск на STparts.ru...")
                     stparts_result = await stparts_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
+
+                    logger.info("🟠 [3/3] Поиск на Trast.ru...")
+                    trast_result = await trast_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
 
                     all_prices = []
                     zzap_min = None
                     stparts_min = None
+                    trast_min = None
                     brand = None
 
                     if zzap_result.get('status') in ['DONE', 'success'] and zzap_result.get('prices'):
@@ -119,6 +125,18 @@ async def process_tasks():
                     else:
                         logger.warning(f"  ⚠️ STparts: {stparts_result.get('status', 'error')}")
 
+                    if trast_result.get('status') == 'success' and trast_result.get('prices'):
+                        trast_min = trast_result['prices'].get('min')
+                        if trast_min:
+                            all_prices.append(trast_min)
+                            logger.info(f"  ✅ Trast: {trast_min}₽")
+                        # Получаем бренд из Trast если не нашли ранее
+                        if not brand and trast_result.get('brand'):
+                            brand = trast_result['brand']
+                            logger.info(f"  🏷️ Бренд (Trast): {brand}")
+                    else:
+                        logger.warning(f"  ⚠️ Trast: {trast_result.get('status', 'error')}")
+
                     if all_prices:
                         min_price = min(all_prices)
                         avg_price = round(sum(all_prices) / len(all_prices), 2)
@@ -130,6 +148,7 @@ async def process_tasks():
                                 avg_price = ?,
                                 zzap_min_price = ?,
                                 stparts_min_price = ?,
+                                trast_min_price = ?,
                                 brand = ?,
                                 result_url = ?,
                                 completed_at = CURRENT_TIMESTAMP
@@ -139,8 +158,9 @@ async def process_tasks():
                                 avg_price,
                                 zzap_min,
                                 stparts_min,
+                                trast_min,
                                 brand,
-                                zzap_result.get('url') or stparts_result.get('url'),
+                                zzap_result.get('url') or stparts_result.get('url') or trast_result.get('url'),
                                 task_id
                             )
                         )
@@ -154,9 +174,11 @@ async def process_tasks():
                             logger.info(f"   🔵 ZZAP: {zzap_min}₽")
                         if stparts_min:
                             logger.info(f"   🟢 STparts: {stparts_min}₽")
+                        if trast_min:
+                            logger.info(f"   🟠 Trast: {trast_min}₽")
 
                     else:
-                        error_msg = f"ZZAP: {zzap_result.get('status')}, STparts: {stparts_result.get('status')}"
+                        error_msg = f"ZZAP: {zzap_result.get('status')}, STparts: {stparts_result.get('status')}, Trast: {trast_result.get('status')}"
                         cursor.execute(
                             """UPDATE tasks SET
                                 status = 'ERROR',
