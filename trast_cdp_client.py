@@ -357,8 +357,8 @@ class TrastCDPClient(BaseBrowserClient):
             brand_filter: Фильтр по бренду (необязательно)
         """
         try:
-            # Формируем URL поиска
-            search_url = f"{self.BASE_URL}/search/?query={partnumber}"
+            # Формируем URL поиска (используем ?s= вместо /search/?query=)
+            search_url = f"{self.BASE_URL}/?s={partnumber}"
             await self.page.goto(search_url, wait_until='networkidle', timeout=60000)
             await self.page.wait_for_timeout(3000)
 
