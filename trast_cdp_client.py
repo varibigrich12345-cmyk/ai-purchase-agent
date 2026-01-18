@@ -76,9 +76,22 @@ class TrastCDPClient(BaseBrowserClient):
                 'input[name="login"]',
                 'input[name="email"]',
                 'input[name="username"]',
+                'input[name="USER_LOGIN"]',  # Bitrix
+                'input[name="AUTH_LOGIN"]',  # Bitrix
+                'input[name="AUTH[LOGIN]"]',  # Bitrix array
+                'input[name="user_login"]',
+                'input[name="user"]',
+                'input[name="phone"]',
                 'input[type="email"]',
+                'input[type="tel"]',  # Phone login
+                'input[id="login"]',
+                'input[id="email"]',
                 'input[placeholder*="логин" i]',
                 'input[placeholder*="email" i]',
+                'input[placeholder*="почт" i]',
+                'input[placeholder*="телефон" i]',
+                '#USER_LOGIN',  # Bitrix ID
+                '#AUTH_LOGIN',
             ]
 
             login_field = None
@@ -89,9 +102,17 @@ class TrastCDPClient(BaseBrowserClient):
 
             if login_field:
                 await self.page.fill(login_field, TRAST_LOGIN)
-                logger.info(f"[trast] Логин введён: {TRAST_LOGIN}")
+                logger.info(f"[trast] Логин введён в поле: {login_field}")
             else:
-                logger.error("[trast] Поле логина не найдено")
+                # Debug: выводим все input на странице
+                try:
+                    inputs = await self.page.locator('input').all()
+                    logger.error(f"[trast] Поле логина не найдено. Найдено {len(inputs)} input элементов:")
+                    for inp in inputs[:10]:  # Первые 10
+                        attrs = await inp.evaluate('el => ({name: el.name, type: el.type, id: el.id, placeholder: el.placeholder})')
+                        logger.error(f"  input: {attrs}")
+                except Exception as e:
+                    logger.error(f"[trast] Поле логина не найдено, debug ошибка: {e}")
                 return False
 
             # Ищем поле пароля
