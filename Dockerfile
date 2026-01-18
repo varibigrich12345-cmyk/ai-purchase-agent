@@ -57,10 +57,8 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright and Chromium browser
-# Note: We skip 'playwright install-deps' as dependencies are pre-installed above
-RUN pip install playwright && \
-    playwright install chromium
+# Install Playwright
+RUN pip install playwright
 
 # Copy application code
 COPY . .
@@ -71,7 +69,10 @@ RUN mkdir -p /app/cookies_backup /app/data
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
+
+# Switch to non-root user and install Chromium browser
 USER appuser
+RUN playwright install chromium
 
 # Default environment variables
 ENV BROWSER_MODE=headless
