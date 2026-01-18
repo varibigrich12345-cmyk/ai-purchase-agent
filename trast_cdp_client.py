@@ -449,105 +449,108 @@ class TrastCDPClient(BaseBrowserClient):
             logger.debug(f"[trast] Бренд не найден для клика: {e}")
             return False
 
+    # Маппинг брендов: что ищем -> что должно быть в производителе
+    BRAND_MAPPING = {
+        'peugeot': ['peugeot-citroen', 'peugeot', 'citroen', 'psa'],
+        'citroen': ['peugeot-citroen', 'citroen', 'peugeot', 'psa'],
+        'toyota': ['toyota'],
+        'honda': ['honda'],
+        'nissan': ['nissan'],
+        'ford': ['ford'],
+        'vw': ['volkswagen', 'vw', 'vag'],
+        'volkswagen': ['volkswagen', 'vw', 'vag'],
+        'bmw': ['bmw'],
+        'mercedes': ['mercedes', 'mercedes-benz', 'daimler'],
+        'opel': ['opel', 'gm'],
+        'renault': ['renault'],
+        'hyundai': ['hyundai', 'kia', 'mobis'],
+        'kia': ['kia', 'hyundai', 'mobis'],
+    }
+
+    def _matches_brand_filter(self, manufacturer: str, brand_filter: str) -> bool:
+        """Проверить, соответствует ли производитель фильтру по бренду."""
+        if not brand_filter or not manufacturer:
+            return True
+
+        brand_lower = brand_filter.lower().strip()
+        manuf_lower = manufacturer.lower().strip()
+
+        # Получаем список допустимых производителей для этого бренда
+        allowed_manufacturers = self.BRAND_MAPPING.get(brand_lower, [brand_lower])
+
+        # Проверяем, содержит ли производитель любой из допустимых вариантов
+        for allowed in allowed_manufacturers:
+            if allowed in manuf_lower:
+                return True
+
+        return False
+
     async def _extract_prices_and_brand(self, brand_filter: str = None) -> Dict[str, Any]:
         """Извлечь цены и бренд из результатов поиска."""
         prices = []
         brand = None
-        filtered_count = 0
         total_count = 0
+        filtered_count = 0
 
         try:
             # Ждём появления результатов
             await self.page.wait_for_timeout(2000)
 
-            # Получаем весь текст страницы для анализа
-            page_text = await self.page.content()
+            # Получаем чистый текст страницы
+            plain_text = await self.page.inner_text('body')
 
-            # Ищем бренд на странице
-            brand_patterns = [
-                r'data-brand="([^"]+)"',
-                r'class="brand[^"]*"[^>]*>([^<]+)<',
-                r'Производитель:\s*([^<\n]+)',
-                r'Бренд:\s*([^<\n]+)',
-            ]
+            # Разбиваем на блоки товаров по паттерну "Производитель:"
+            # Каждый блок содержит информацию о товаре
+            product_blocks = re.split(r'(?=Производитель:)', plain_text)
 
-            for pattern in brand_patterns:
-                match = re.search(pattern, page_text, re.IGNORECASE)
-                if match:
-                    brand = match.group(1).strip()
-                    if brand and len(brand) > 1 and len(brand) < 50:
-                        logger.info(f"[trast] Найден бренд: {brand}")
-                        break
-
-            # Ищем таблицу результатов (разные варианты)
-            table_selectors = [
-                'table.results',
-                'table.search-results',
-                '.results-table',
-                '#searchResults',
-                'table tbody tr',
-            ]
-
-            rows = None
-            for selector in table_selectors:
-                try:
-                    locator = self.page.locator(selector)
-                    if await locator.count() > 0:
-                        if 'tr' in selector:
-                            rows = locator
-                        else:
-                            rows = locator.locator('tr')
-                        break
-                except:
+            for block in product_blocks:
+                if 'Производитель:' not in block:
                     continue
 
-            if rows:
-                count = await rows.count()
-                logger.info(f"[trast] Найдено {count} строк")
+                total_count += 1
 
-                for i in range(min(count, 100)):  # Ограничиваем 100 строками
-                    row = rows.nth(i)
-                    row_text = await row.inner_text()
+                # Извлекаем производителя
+                manuf_match = re.search(r'Производитель:\s*([^\n₽]+)', block)
+                if not manuf_match:
+                    continue
 
-                    # Если есть фильтр по бренду - проверяем
-                    if brand_filter:
-                        total_count += 1
-                        if brand_filter.lower() not in row_text.lower():
-                            continue
-                        filtered_count += 1
+                manufacturer = manuf_match.group(1).strip()
 
-                    # Ищем цену в разных форматах
-                    price_patterns = [
-                        r"([\d\s]+[,.]?\d*)\s*₽",
-                        r"([\d\s]+[,.]?\d*)\s*руб",
-                        r"([\d\s]+[,.]?\d*)\s*RUB",
-                        r"цена[:\s]*([\d\s]+[,.]?\d*)",
-                    ]
+                # Если есть фильтр по бренду - проверяем соответствие
+                if brand_filter:
+                    if not self._matches_brand_filter(manufacturer, brand_filter):
+                        logger.debug(f"[trast] Пропускаем производителя '{manufacturer}' (фильтр: {brand_filter})")
+                        continue
+                    logger.debug(f"[trast] Производитель '{manufacturer}' соответствует фильтру '{brand_filter}'")
 
-                    for pattern in price_patterns:
-                        match = re.search(pattern, row_text, re.IGNORECASE)
-                        if match:
-                            try:
-                                price_str = match.group(1).replace(" ", "").replace("\xa0", "").replace(",", ".")
-                                val = float(price_str)
-                                if 10 < val < 500000:
-                                    prices.append(val)
-                                    break
-                            except ValueError:
-                                pass
+                filtered_count += 1
 
-            # Если не нашли в таблице, ищем цены в тексте страницы
-            if not prices:
-                # Получаем чистый текст страницы (без HTML)
-                plain_text = await self.page.inner_text('body')
-                # Ищем все цены на странице
-                all_prices = re.findall(r"([\d\s\xa0]{1,15})\s*₽", plain_text)
-                for price_str in all_prices:
+                # Сохраняем бренд первого подходящего товара
+                if not brand:
+                    brand = manufacturer
+
+                # Извлекаем цену из этого блока
+                price_match = re.search(r'([\d\s\xa0]{1,15})\s*₽', block)
+                if price_match:
                     try:
-                        price_str = price_str.replace(" ", "").replace("\xa0", "").replace(",", ".").strip()
+                        price_str = price_match.group(1).replace(" ", "").replace("\xa0", "").strip()
                         if price_str:
                             val = float(price_str)
-                            if 100 < val < 500000:  # Разумный диапазон цен
+                            if 100 < val < 500000:
+                                prices.append(val)
+                                logger.debug(f"[trast] Цена {val}₽ от {manufacturer}")
+                    except ValueError:
+                        pass
+
+            # Если не нашли блоки с производителем, пробуем простой поиск цен
+            if not prices and not brand_filter:
+                all_prices = re.findall(r'([\d\s\xa0]{1,15})\s*₽', plain_text)
+                for price_str in all_prices:
+                    try:
+                        price_str = price_str.replace(" ", "").replace("\xa0", "").strip()
+                        if price_str:
+                            val = float(price_str)
+                            if 100 < val < 500000:
                                 prices.append(val)
                     except ValueError:
                         pass
@@ -555,8 +558,8 @@ class TrastCDPClient(BaseBrowserClient):
         except Exception as e:
             logger.debug(f"[trast] Ошибка извлечения данных: {e}")
 
-        if brand_filter and total_count > 0:
-            logger.info(f"[trast] Отфильтровано: {filtered_count}/{total_count} строк по бренду '{brand_filter}'")
+        if brand_filter:
+            logger.info(f"[trast] Отфильтровано по бренду '{brand_filter}': {filtered_count}/{total_count} товаров")
 
         unique_prices = list(set(prices))
         if unique_prices:
