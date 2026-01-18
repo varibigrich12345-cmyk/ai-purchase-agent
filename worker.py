@@ -22,6 +22,7 @@ sys.path.insert(0, str(BASEDIR))
 import sqlite3
 from zzap_cdp_client import ZZapCDPClient
 from stparts_cdp_client import STPartsCDPClient
+from config import DB_PATH
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,7 +31,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-DBPATH = BASEDIR / "tasks.db"
+DBPATH = DB_PATH
 
 def get_db_connection():
     """Создать подключение к БД"""
@@ -44,6 +45,7 @@ async def process_tasks():
     Последовательно запускает ZZAP и STparts для каждой задачи.
     """
     logger.info("🔥 Worker запущен!")
+    logger.info(f"📁 База данных: {DBPATH}")
     logger.info("🌐 Режим: CDP (подключение к Chrome)")
     logger.info("💡 Убедитесь, что Chrome запущен через start_chrome_debug.bat")
 

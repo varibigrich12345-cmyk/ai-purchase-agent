@@ -2,11 +2,16 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 import sqlite3
+import sys
 from pathlib import Path
+
+# Add parent directory to path to import config
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from config import DB_PATH
 
 router = APIRouter()
 
-DBPATH = Path(__file__).resolve().parent.parent.parent / "tasks.db"
+DBPATH = DB_PATH
 
 
 def get_db():

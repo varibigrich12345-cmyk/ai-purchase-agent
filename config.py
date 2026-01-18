@@ -8,8 +8,8 @@ BASEDIR = Path(__file__).resolve().parent
 STPARTS_LOGIN = os.getenv("STPARTS_LOGIN", "89297748866@mail.ru")
 STPARTS_PASSWORD = os.getenv("STPARTS_PASSWORD", "SSSsss@12345678")
 
-# Database
-DB_PATH = BASEDIR / "tasks.db"
+# Database - use env var for Docker, fallback to local for development
+DB_PATH = Path(os.getenv("DATABASE_PATH", str(BASEDIR / "tasks.db")))
 
 # Parser settings
 ZZAP_MIN_PRICE = 2000
