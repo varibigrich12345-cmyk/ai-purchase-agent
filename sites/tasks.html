@@ -375,6 +375,58 @@
             font-size: 16px;
         }
 
+        /* Кастомный autocomplete dropdown */
+        .autocomplete-wrapper {
+            position: relative;
+        }
+
+        .autocomplete-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 200px;
+            overflow-y: auto;
+            background: white;
+            border: 2px solid #667eea;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 1000;
+            margin-top: -12px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .autocomplete-dropdown.show {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 16px;
+            -webkit-tap-highlight-color: rgba(102, 126, 234, 0.3);
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover,
+        .autocomplete-item:active,
+        .autocomplete-item.highlighted {
+            background: #f0f4ff;
+            color: #667eea;
+        }
+
+        .autocomplete-item:active {
+            background: #e0e7ff;
+        }
+
         /* Мобильная адаптация */
         @media (max-width: 480px) {
             body {
@@ -446,53 +498,10 @@
 
         <div class="input-group">
             <input id="partnumber" placeholder="Артикул (например: 1351PK)" autocomplete="off">
-            <input id="search-brand" placeholder="Бренд (например: Peugeot) — необязательно" list="brand-list">
-            <datalist id="brand-list">
-                <option value="Peugeot">
-                <option value="Citroen">
-                <option value="Renault">
-                <option value="Toyota">
-                <option value="Honda">
-                <option value="Nissan">
-                <option value="Mazda">
-                <option value="Ford">
-                <option value="Volkswagen">
-                <option value="BMW">
-                <option value="Mercedes">
-                <option value="Audi">
-                <option value="Opel">
-                <option value="Chevrolet">
-                <option value="Hyundai">
-                <option value="Kia">
-                <option value="Mitsubishi">
-                <option value="Suzuki">
-                <option value="Subaru">
-                <option value="Fiat">
-                <option value="Skoda">
-                <option value="Volvo">
-                <option value="Land Rover">
-                <option value="Jeep">
-                <option value="Lada">
-                <option value="Click&Drive">
-                <option value="Bosch">
-                <option value="Valeo">
-                <option value="Denso">
-                <option value="NGK">
-                <option value="Mann">
-                <option value="Mahle">
-                <option value="Febi">
-                <option value="Lemforder">
-                <option value="TRW">
-                <option value="ATE">
-                <option value="Sachs">
-                <option value="LuK">
-                <option value="Gates">
-                <option value="Continental">
-                <option value="SKF">
-                <option value="SNR">
-                <option value="FAG">
-                <option value="INA">
-            </datalist>
+            <div class="autocomplete-wrapper">
+                <input id="search-brand" placeholder="Бренд (например: Peugeot) — необязательно" autocomplete="off">
+                <div id="brand-dropdown" class="autocomplete-dropdown"></div>
+            </div>
             <div class="btn-group">
                 <button onclick="createTask()">Найти</button>
                 <button class="secondary" onclick="loadTasks()">Обновить</button>
@@ -506,6 +515,135 @@
 
     <script>
         const API = '/api/tasks';
+
+        // Список брендов для autocomplete
+        const BRANDS = [
+            'Peugeot', 'Citroen', 'Renault', 'Toyota', 'Honda', 'Nissan', 'Mazda',
+            'Ford', 'Volkswagen', 'BMW', 'Mercedes', 'Audi', 'Opel', 'Chevrolet',
+            'Hyundai', 'Kia', 'Mitsubishi', 'Suzuki', 'Subaru', 'Fiat', 'Skoda',
+            'Volvo', 'Land Rover', 'Jeep', 'Lada', 'Bosch', 'Valeo', 'Denso',
+            'NGK', 'Mann', 'Mahle', 'Febi', 'Lemforder', 'TRW', 'ATE', 'Sachs',
+            'LuK', 'Gates', 'Continental', 'SKF', 'SNR', 'FAG', 'INA'
+        ];
+
+        // Autocomplete для брендов
+        const brandInput = document.getElementById('search-brand');
+        const brandDropdown = document.getElementById('brand-dropdown');
+        let highlightedIndex = -1;
+
+        function showBrandDropdown(filter = '') {
+            const filterLower = filter.toLowerCase();
+            const filtered = filter
+                ? BRANDS.filter(b => b.toLowerCase().includes(filterLower))
+                : BRANDS;
+
+            if (filtered.length === 0) {
+                brandDropdown.classList.remove('show');
+                return;
+            }
+
+            highlightedIndex = -1;
+            brandDropdown.innerHTML = filtered.map((brand, idx) => `
+                <div class="autocomplete-item" data-value="${brand}" data-index="${idx}">${brand}</div>
+            `).join('');
+
+            // Добавляем обработчики для каждого элемента
+            brandDropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+                // Touch события для мобильных
+                item.addEventListener('touchstart', handleItemTouch, { passive: true });
+                item.addEventListener('touchend', handleItemSelect);
+                // Mouse события для десктопа
+                item.addEventListener('mousedown', handleItemSelect);
+            });
+
+            brandDropdown.classList.add('show');
+        }
+
+        function hideBrandDropdown() {
+            setTimeout(() => {
+                brandDropdown.classList.remove('show');
+            }, 150); // Небольшая задержка чтобы успел сработать клик/тач
+        }
+
+        function handleItemTouch(e) {
+            // Подсветка при касании
+            this.classList.add('highlighted');
+        }
+
+        function handleItemSelect(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const value = this.getAttribute('data-value');
+            if (value) {
+                brandInput.value = value;
+                brandDropdown.classList.remove('show');
+                brandInput.blur();
+            }
+        }
+
+        function selectHighlighted() {
+            const items = brandDropdown.querySelectorAll('.autocomplete-item');
+            if (highlightedIndex >= 0 && highlightedIndex < items.length) {
+                brandInput.value = items[highlightedIndex].getAttribute('data-value');
+                brandDropdown.classList.remove('show');
+            }
+        }
+
+        function updateHighlight(newIndex) {
+            const items = brandDropdown.querySelectorAll('.autocomplete-item');
+            if (items.length === 0) return;
+
+            // Убираем старую подсветку
+            items.forEach(item => item.classList.remove('highlighted'));
+
+            // Нормализуем индекс
+            if (newIndex < 0) newIndex = items.length - 1;
+            if (newIndex >= items.length) newIndex = 0;
+
+            highlightedIndex = newIndex;
+            items[highlightedIndex].classList.add('highlighted');
+            items[highlightedIndex].scrollIntoView({ block: 'nearest' });
+        }
+
+        // События для поля ввода бренда
+        brandInput.addEventListener('focus', () => showBrandDropdown(brandInput.value));
+        brandInput.addEventListener('input', () => showBrandDropdown(brandInput.value));
+        brandInput.addEventListener('blur', hideBrandDropdown);
+
+        brandInput.addEventListener('keydown', (e) => {
+            if (!brandDropdown.classList.contains('show')) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                updateHighlight(highlightedIndex + 1);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                updateHighlight(highlightedIndex - 1);
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (highlightedIndex >= 0) {
+                    selectHighlighted();
+                } else {
+                    brandDropdown.classList.remove('show');
+                    createTask();
+                }
+            } else if (e.key === 'Escape') {
+                brandDropdown.classList.remove('show');
+            }
+        });
+
+        // Закрытие dropdown при клике вне
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.autocomplete-wrapper')) {
+                brandDropdown.classList.remove('show');
+            }
+        });
+
+        document.addEventListener('touchstart', (e) => {
+            if (!e.target.closest('.autocomplete-wrapper')) {
+                brandDropdown.classList.remove('show');
+            }
+        }, { passive: true });
 
         function formatPrice(price) {
             if (!price) return null;
@@ -687,11 +825,7 @@
             }
         });
 
-        document.getElementById('search-brand').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                createTask();
-            }
-        });
+        // Enter для search-brand обрабатывается в autocomplete keydown
 
         // Автообновление каждые 2 секунды
         setInterval(loadTasks, 2000);
