@@ -3,6 +3,7 @@
 
 Функции:
 - Подключение к уже запущенному Chrome через CDP (remote debugging port 9222)
+- Headless режим для Docker (запуск встроенного Chromium)
 - Проверка авторизации и автологин
 - Keep-alive для поддержания сессии
 - Backup/restore cookies в файл
@@ -11,6 +12,7 @@
 import asyncio
 import json
 import logging
+import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +28,9 @@ from playwright.async_api import (
 )
 
 from config import BASEDIR, CHROME_CDP_ENDPOINT, COOKIES_BACKUP_DIR, KEEP_ALIVE_INTERVAL
+
+# Browser mode: 'cdp' (connect to external Chrome) or 'headless' (launch built-in Chromium)
+BROWSER_MODE = os.getenv("BROWSER_MODE", "cdp")
 
 logger = logging.getLogger(__name__)
 
@@ -66,42 +71,77 @@ class BaseBrowserClient(ABC):
 
     async def connect(self) -> bool:
         """
-        Подключиться к запущенному Chrome через CDP.
+        Подключиться к браузеру.
+
+        Режимы работы (определяется переменной окружения BROWSER_MODE):
+        - 'cdp': Подключение к внешнему Chrome через CDP (для локальной разработки)
+        - 'headless': Запуск встроенного Chromium в headless режиме (для Docker)
 
         Returns:
             True если подключение и авторизация успешны
         """
         try:
-            logger.info(f"[{self.SITE_NAME}] Подключение к Chrome CDP: {self.CDP_ENDPOINT}")
-
             self.playwright = await async_playwright().start()
 
-            # Подключаемся к существующему Chrome
-            self.browser = await self.playwright.chromium.connect_over_cdp(
-                self.CDP_ENDPOINT,
-                timeout=30000
-            )
+            if BROWSER_MODE == "headless":
+                # Headless mode: запускаем встроенный Chromium
+                logger.info(f"[{self.SITE_NAME}] Запуск Chromium в headless режиме")
 
-            # Получаем существующий контекст или создаём новый
-            contexts = self.browser.contexts
-            if contexts:
-                self.context = contexts[0]
-                logger.info(f"[{self.SITE_NAME}] Использую существующий контекст")
-            else:
+                self.browser = await self.playwright.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-accelerated-2d-canvas',
+                        '--no-first-run',
+                        '--no-zygote',
+                        '--disable-gpu',
+                    ]
+                )
+
+                # Создаём новый контекст
                 self.context = await self.browser.new_context(
                     viewport={'width': 1920, 'height': 1080},
                     user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 )
-                logger.info(f"[{self.SITE_NAME}] Создан новый контекст")
+                logger.info(f"[{self.SITE_NAME}] Создан новый контекст (headless)")
 
                 # Пробуем загрузить cookies из backup
                 await self._load_cookies_from_backup()
 
-            # Ищем существующую страницу с нашим сайтом или создаём новую
-            self.page = await self._find_or_create_page()
+                # Создаём новую страницу
+                self.page = await self.context.new_page()
+
+            else:
+                # CDP mode: подключаемся к внешнему Chrome
+                logger.info(f"[{self.SITE_NAME}] Подключение к Chrome CDP: {self.CDP_ENDPOINT}")
+
+                self.browser = await self.playwright.chromium.connect_over_cdp(
+                    self.CDP_ENDPOINT,
+                    timeout=30000
+                )
+
+                # Получаем существующий контекст или создаём новый
+                contexts = self.browser.contexts
+                if contexts:
+                    self.context = contexts[0]
+                    logger.info(f"[{self.SITE_NAME}] Использую существующий контекст")
+                else:
+                    self.context = await self.browser.new_context(
+                        viewport={'width': 1920, 'height': 1080},
+                        user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    )
+                    logger.info(f"[{self.SITE_NAME}] Создан новый контекст")
+
+                    # Пробуем загрузить cookies из backup
+                    await self._load_cookies_from_backup()
+
+                # Ищем существующую страницу с нашим сайтом или создаём новую
+                self.page = await self._find_or_create_page()
 
             self.is_connected = True
-            logger.info(f"[{self.SITE_NAME}] Подключение установлено")
+            logger.info(f"[{self.SITE_NAME}] Подключение установлено (режим: {BROWSER_MODE})")
 
             # Проверяем авторизацию
             await self._ensure_authenticated()
@@ -112,8 +152,9 @@ class BaseBrowserClient(ABC):
             return True
 
         except Exception as e:
-            logger.error(f"[{self.SITE_NAME}] Ошибка подключения к Chrome: {e}")
-            logger.error(f"[{self.SITE_NAME}] Убедитесь, что Chrome запущен с флагом --remote-debugging-port=9222")
+            logger.error(f"[{self.SITE_NAME}] Ошибка подключения к браузеру: {e}")
+            if BROWSER_MODE != "headless":
+                logger.error(f"[{self.SITE_NAME}] Убедитесь, что Chrome запущен с флагом --remote-debugging-port=9222")
             return False
 
     async def _find_or_create_page(self) -> Page:
@@ -130,7 +171,7 @@ class BaseBrowserClient(ABC):
         return page
 
     async def disconnect(self) -> None:
-        """Отключиться от Chrome (не закрывает браузер)."""
+        """Отключиться от браузера."""
         logger.info(f"[{self.SITE_NAME}] Отключение...")
 
         # Останавливаем keep-alive
@@ -139,7 +180,11 @@ class BaseBrowserClient(ABC):
         # Сохраняем cookies перед отключением
         await self._save_cookies_to_backup()
 
-        # Отключаемся (но не закрываем Chrome)
+        # В headless режиме закрываем браузер полностью
+        if BROWSER_MODE == "headless" and self.browser:
+            await self.browser.close()
+
+        # Отключаемся (в CDP режиме не закрываем Chrome)
         if self.playwright:
             await self.playwright.stop()
 

@@ -4,6 +4,7 @@ __pycache__/
 *.class
 venv/
 env/
+.venv/
 
 # Логи
 *.log
@@ -22,7 +23,20 @@ Thumbs.db
 
 # Database
 tasks.db
+data/
 
 # Cookies backup
 cookies_backup/
+
+# Claude
 .claude/
+
+# Environment
+.env
+
+# Binaries
+*.exe
+*.zip
+
+# Docker
+.docker/

@@ -1,0 +1,67 @@
+# AI Purchase Agent - Docker Compose
+# Запуск: docker-compose up -d
+
+version: '3.8'
+
+services:
+  # FastAPI web server
+  web:
+    build: .
+    container_name: ai-purchase-web
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./sites:/app/sites:ro
+    environment:
+      - BROWSER_MODE=headless
+      - DATABASE_PATH=/app/data/tasks.db
+      - STPARTS_LOGIN=${STPARTS_LOGIN}
+      - STPARTS_PASSWORD=${STPARTS_PASSWORD}
+    env_file:
+      - .env
+    command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/tasks"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - app-network
+
+  # Background worker for parsing
+  worker:
+    build: .
+    container_name: ai-purchase-worker
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - ./cookies_backup:/app/cookies_backup
+    environment:
+      - BROWSER_MODE=headless
+      - DATABASE_PATH=/app/data/tasks.db
+      - STPARTS_LOGIN=${STPARTS_LOGIN}
+      - STPARTS_PASSWORD=${STPARTS_PASSWORD}
+      - ZZAP_MIN_PRICE=${ZZAP_MIN_PRICE:-2000}
+      - ZZAP_MAX_PRICE=${ZZAP_MAX_PRICE:-50000}
+      - STPARTS_MIN_PRICE=${STPARTS_MIN_PRICE:-2000}
+      - STPARTS_MAX_PRICE=${STPARTS_MAX_PRICE:-50000}
+    env_file:
+      - .env
+    command: ["python", "worker.py"]
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - app-network
+    # Playwright needs shared memory for browser
+    shm_size: '2gb'
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  data:

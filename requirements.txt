@@ -1,4 +1,17 @@
+# AI Purchase Agent - Dependencies
+
+# Web Framework
 fastapi==0.109.0
 uvicorn[standard]==0.25.0
+
+# Browser Automation
 playwright==1.41.0
+
+# Data Validation
 pydantic==2.5.0
+
+# HTTP Client (for healthchecks)
+httpx==0.26.0
+
+# Environment Variables
+python-dotenv==1.0.0
