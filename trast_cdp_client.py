@@ -9,20 +9,155 @@ CDP клиент для trast.ru - подключается к уже запущ
 
 import asyncio
 import logging
+import os
 import re
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
+from playwright.async_api import async_playwright, Browser, BrowserContext, Page, Playwright
 from base_browser_client import BaseBrowserClient
-from config import TRAST_LOGIN, TRAST_PASSWORD
+from config import TRAST_LOGIN, TRAST_PASSWORD, COOKIES_BACKUP_DIR
 
 logger = logging.getLogger(__name__)
 
+# Proxy for Trast (optional) - set TRAST_PROXY=http://user:pass@host:port
+TRAST_PROXY = os.getenv("TRAST_PROXY", "")
+
 
 class TrastCDPClient(BaseBrowserClient):
-    """CDP клиент для trast-zapchast.ru с авторизацией и keep-alive."""
+    """CDP клиент для trast-zapchast.ru с авторизацией и keep-alive.
+
+    Использует stealth-режим для обхода JS-challenge защиты.
+    """
 
     SITE_NAME = "trast"
     BASE_URL = "https://trast-zapchast.ru"
+
+    async def connect(self) -> bool:
+        """Подключиться к браузеру со stealth настройками для обхода защиты."""
+        try:
+            self.playwright = await async_playwright().start()
+
+            logger.info(f"[{self.SITE_NAME}] Запуск Chromium в stealth режиме")
+
+            # Stealth launch args
+            launch_args = [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-blink-features=AutomationControlled',  # Hide automation
+                '--no-first-run',
+                '--disable-infobars',
+                '--window-size=1920,1080',
+                '--start-maximized',
+            ]
+
+            self.browser = await self.playwright.chromium.launch(
+                headless=True,
+                args=launch_args
+            )
+
+            # Proxy settings
+            proxy_config = None
+            if TRAST_PROXY:
+                logger.info(f"[{self.SITE_NAME}] Используем прокси: {TRAST_PROXY.split('@')[-1] if '@' in TRAST_PROXY else TRAST_PROXY}")
+                proxy_config = {"server": TRAST_PROXY}
+
+            # Stealth context with realistic fingerprint
+            self.context = await self.browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                locale='ru-RU',
+                timezone_id='Europe/Moscow',
+                proxy=proxy_config,
+                java_script_enabled=True,
+                permissions=['geolocation'],
+                color_scheme='light',
+                extra_http_headers={
+                    'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                    'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': '"Windows"',
+                }
+            )
+            logger.info(f"[{self.SITE_NAME}] Создан stealth контекст")
+
+            # Anti-detection scripts
+            await self.context.add_init_script("""
+                // Remove webdriver property
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+
+                // Fix plugins
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5]
+                });
+
+                // Fix languages
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['ru-RU', 'ru', 'en-US', 'en']
+                });
+
+                // Fix permissions
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: Notification.permission }) :
+                        originalQuery(parameters)
+                );
+            """)
+
+            # Load cookies from backup
+            await self._load_cookies_from_backup()
+
+            # Create page
+            self.page = await self.context.new_page()
+
+            self.is_connected = True
+            logger.info(f"[{self.SITE_NAME}] Подключение установлено (stealth режим)")
+
+            # Navigate to site and wait for JS challenge
+            await self._pass_js_challenge()
+
+            # Check auth
+            await self._ensure_authenticated()
+
+            # Start keep-alive
+            self._start_keep_alive()
+
+            return True
+
+        except Exception as e:
+            logger.error(f"[{self.SITE_NAME}] Ошибка подключения: {e}")
+            return False
+
+    async def _pass_js_challenge(self) -> bool:
+        """Пройти JS challenge защиту сайта."""
+        try:
+            logger.info(f"[{self.SITE_NAME}] Проходим JS challenge...")
+
+            await self.page.goto(self.BASE_URL, wait_until='domcontentloaded', timeout=60000)
+
+            # Wait for JS challenge to complete (page will reload)
+            for _ in range(10):  # Max 10 attempts, 3 sec each
+                await self.page.wait_for_timeout(3000)
+
+                # Check if we're past the challenge
+                content = await self.page.content()
+                if 'js-challenge' not in content.lower() and 'jsch._jsChallenge' not in content:
+                    logger.info(f"[{self.SITE_NAME}] JS challenge пройден!")
+                    return True
+
+                # Check for challenge script
+                if 'Ваш браузер не смог пройти' in content:
+                    logger.debug(f"[{self.SITE_NAME}] Ожидаем прохождения challenge...")
+                    continue
+
+            logger.warning(f"[{self.SITE_NAME}] JS challenge не пройден за отведённое время")
+            return False
+
+        except Exception as e:
+            logger.error(f"[{self.SITE_NAME}] Ошибка прохождения JS challenge: {e}")
+            return False
 
     async def check_auth(self) -> bool:
         """Проверить, авторизован ли пользователь на trast.ru."""

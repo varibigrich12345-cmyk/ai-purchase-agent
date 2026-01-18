@@ -22,7 +22,7 @@ sys.path.insert(0, str(BASEDIR))
 import sqlite3
 from zzap_cdp_client import ZZapCDPClient
 from stparts_cdp_client import STPartsCDPClient
-# from trast_cdp_client import TrastCDPClient  # Отключён - сайт блокирует датацентровые IP
+from trast_cdp_client import TrastCDPClient  # Stealth mode с обходом JS-challenge
 from config import DB_PATH
 
 logging.basicConfig(
@@ -53,11 +53,10 @@ async def process_tasks():
     # Подключаемся к Chrome через CDP
     logger.info("🔧 Подключение к Chrome CDP...")
 
-    # NOTE: Trast отключён - сайт блокирует датацентровые IP (403/timeout)
-    async with ZZapCDPClient() as zzap_client, STPartsCDPClient() as stparts_client:
+    async with ZZapCDPClient() as zzap_client, STPartsCDPClient() as stparts_client, TrastCDPClient() as trast_client:
         logger.info("  ✅ ZZAP клиент подключён")
         logger.info("  ✅ STparts клиент подключён")
-        # logger.info("  ✅ Trast клиент подключён")  # Отключён
+        logger.info("  ✅ Trast клиент подключён (stealth режим)")
         logger.info("✅ Все клиенты готовы к работе!")
 
         while True:
@@ -87,14 +86,14 @@ async def process_tasks():
                     )
                     conn.commit()
 
-                    logger.info("🔵 [1/2] Поиск на ZZAP.ru...")
+                    logger.info("🔵 [1/3] Поиск на ZZAP.ru...")
                     zzap_result = await zzap_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
 
-                    logger.info("🟢 [2/2] Поиск на STparts.ru...")
+                    logger.info("🟢 [2/3] Поиск на STparts.ru...")
                     stparts_result = await stparts_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
 
-                    # Trast отключён - сайт блокирует датацентровые IP
-                    trast_result = {'status': 'disabled', 'prices': {}}
+                    logger.info("🟠 [3/3] Поиск на Trast.ru (stealth)...")
+                    trast_result = await trast_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
 
                     all_prices = []
                     zzap_min = None
