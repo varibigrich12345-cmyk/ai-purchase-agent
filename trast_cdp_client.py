@@ -265,6 +265,7 @@ class TrastCDPClient(BaseBrowserClient):
 
             if password_field:
                 await self.page.fill(password_field, TRAST_PASSWORD)
+                logger.info(f"[trast] Пароль введён в поле: {password_field}")
             else:
                 logger.error("[trast] Поле пароля не найдено")
                 return False
@@ -275,25 +276,48 @@ class TrastCDPClient(BaseBrowserClient):
                 'input[type="submit"]',
                 'button:has-text("Войти")',
                 'button:has-text("Вход")',
+                '.btn-login',
+                '[type="submit"]',
             ]
 
+            submit_clicked = False
             for selector in submit_selectors:
                 try:
                     if await self.page.locator(selector).count() > 0:
                         await self.page.click(selector)
+                        logger.info(f"[trast] Нажата кнопка: {selector}")
+                        submit_clicked = True
                         break
-                except:
+                except Exception as e:
+                    logger.debug(f"[trast] Селектор {selector} не сработал: {e}")
                     continue
+
+            if not submit_clicked:
+                logger.error("[trast] Кнопка входа не найдена")
+                # Попробуем нажать Enter
+                await self.page.keyboard.press("Enter")
+                logger.info("[trast] Нажат Enter вместо кнопки")
 
             # Ждём загрузки
             await self.page.wait_for_timeout(5000)
 
+            # Логируем текущий URL для отладки
+            logger.info(f"[trast] URL после логина: {self.page.url}")
+
             # Проверяем успешность
             if await self.check_auth():
                 logger.info("[trast] Авторизация успешна!")
+                # Сохраняем cookies
+                await self._save_cookies_to_backup()
                 return True
             else:
                 logger.error("[trast] Авторизация не удалась")
+                # Логируем что на странице
+                try:
+                    title = await self.page.title()
+                    logger.error(f"[trast] Заголовок страницы: {title}")
+                except:
+                    pass
                 return False
 
         except Exception as e:
