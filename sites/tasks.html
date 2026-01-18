@@ -1,524 +1,185 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Purchase Agent</title>
 
-    <!-- PWA манифест -->
+    <!-- PWA -->
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#667eea">
+    <meta name="theme-color" content="#1e1e2e">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="AI Purchase">
     <link rel="apple-touch-icon" href="/icon-192.png">
 
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#0f0f17',
+                            card: '#1a1a2e',
+                            border: '#2a2a4a',
+                            hover: '#252545',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            padding: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-        }
-
-        h2 {
-            color: white;
-            margin-bottom: 16px;
-            text-align: center;
-            font-size: 1.6rem;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-
-        h3 {
-            color: white;
-            margin: 16px 0 8px;
-            font-size: 1.1rem;
-        }
-
-        /* Форма добавления */
-        .input-group {
-            background: white;
-            padding: 16px;
-            border-radius: 16px;
-            margin-bottom: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-        }
-
-        input {
-            width: 100%;
-            padding: 14px 16px;
-            margin-bottom: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 12px;
-            font-size: 16px;
-            transition: border-color 0.2s;
-        }
-
-        input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 10px;
-        }
-
-        button {
-            flex: 1;
-            padding: 14px 16px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.1s, opacity 0.2s;
-            min-height: 48px;
-        }
-
-        button:active {
-            transform: scale(0.97);
-        }
-
-        button.secondary {
-            background: #6c757d;
-        }
-
-        /* Карточки */
-        .cards-container {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .card {
-            background: white;
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-        }
-
-        /* Свёрнутый заголовок карточки */
-        .card-summary {
-            padding: 12px 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            user-select: none;
-            transition: background 0.2s;
-        }
-
-        .card-summary:hover {
-            background: #f8f9fa;
-        }
-
-        .card-summary:active {
-            background: #e9ecef;
-        }
-
-        .card-summary-left {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex: 1;
-            min-width: 0;
-        }
-
-        .card-summary-id {
-            color: #999;
-            font-size: 12px;
-            flex-shrink: 0;
-        }
-
-        .card-summary-partnumber {
-            font-weight: 700;
-            color: #333;
-            flex-shrink: 0;
-        }
-
-        .card-summary-brand {
-            color: #667eea;
-            font-size: 12px;
-            font-weight: 600;
-            flex-shrink: 0;
-        }
-
-        .card-summary-right {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-shrink: 0;
-        }
-
-        .card-summary-price {
-            font-weight: 700;
-            color: #27ae60;
-            font-size: 15px;
-        }
-
-        .card-summary-price.no-price {
-            color: #999;
-            font-weight: 400;
-        }
-
-        .expand-icon {
-            font-size: 12px;
-            color: #999;
-            transition: transform 0.2s;
-            margin-right: 10px;
-            flex-shrink: 0;
-        }
-
-        .card.expanded .expand-icon {
-            transform: rotate(90deg);
-        }
-
-        /* Развёрнутое содержимое */
-        .card-details {
-            display: none;
-            border-top: 1px solid #e0e0e0;
-        }
-
-        .card.expanded .card-details {
-            display: block;
-        }
-
-        .card-header {
-            padding: 12px 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .card-header-left {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .card-id {
-            color: #999;
-            font-size: 12px;
-        }
-
-        .card-partnumber {
-            font-weight: 700;
-            font-size: 1.2em;
-            color: #333;
-        }
-
-        .card-brand {
-            color: #666;
-            font-size: 13px;
-        }
-
-        .card-filter {
-            background: #667eea;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-
-        /* Статус бейджи */
-        .status-badge {
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .status-DONE { background: #d4edda; color: #155724; }
-        .status-ERROR { background: #f8d7da; color: #721c24; }
-        .status-PENDING { background: #fff3cd; color: #856404; }
-        .status-RUNNING { background: #cce5ff; color: #004085; animation: pulse 1.5s infinite; }
-
-        @keyframes pulse {
+        @keyframes pulse-slow {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
+            50% { opacity: 0.5; }
         }
+        .animate-pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
 
-        /* Лучшая цена */
-        .card-best-price {
-            padding: 12px 16px;
-            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1a1a2e; }
+        ::-webkit-scrollbar-thumb { background: #3a3a5a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4a4a6a; }
+
+        /* Smooth transitions */
+        .row-expand {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
         }
+        .row-expand.open { max-height: 500px; }
 
-        .best-price-label {
-            color: #155724;
-            font-weight: 600;
-            font-size: 14px;
-        }
-
-        .best-price-value {
-            color: #155724;
-            font-weight: 700;
-            font-size: 1.4em;
-        }
-
-        /* Список сайтов */
-        .card-sites {
-            padding: 8px 0;
-        }
-
-        .site-row {
-            display: flex;
-            align-items: center;
-            padding: 10px 16px;
-            border-bottom: 1px solid #f0f0f0;
-        }
-
-        .site-row:last-child {
-            border-bottom: none;
-        }
-
-        .site-row.is-best {
-            background: #f0fff4;
-        }
-
-        .site-icon {
-            width: 24px;
-            font-size: 16px;
-            flex-shrink: 0;
-        }
-
-        .site-name {
-            width: 80px;
-            font-weight: 600;
-            font-size: 14px;
-            flex-shrink: 0;
-        }
-
-        .site-name.zzap { color: #3498db; }
-        .site-name.stparts { color: #27ae60; }
-        .site-name.trast { color: #e67e22; }
-
-        .site-price {
-            flex: 1;
-            font-weight: 700;
-            font-size: 15px;
-            color: #333;
-        }
-
-        .site-price.is-best {
-            color: #27ae60;
-        }
-
-        .site-price.not-found {
-            color: #999;
-            font-weight: 400;
-            font-style: italic;
-        }
-
-        .site-link {
-            padding: 6px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 600;
-            text-decoration: none;
-            color: white;
-            transition: opacity 0.2s;
-        }
-
-        .site-link:hover {
-            opacity: 0.85;
-        }
-
-        .site-link.zzap { background: #3498db; }
-        .site-link.stparts { background: #27ae60; }
-        .site-link.trast { background: #e67e22; }
-
-        .best-tag {
-            background: #27ae60;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 10px;
-            font-weight: 600;
-            margin-left: 8px;
-        }
-
-        /* Средняя цена */
-        .card-footer {
-            padding: 8px 16px;
-            background: #f8f9fa;
-            display: flex;
-            justify-content: space-between;
-            font-size: 13px;
-            color: #666;
-        }
-
-        /* Пустое состояние */
-        .empty-state {
-            text-align: center;
-            color: rgba(255,255,255,0.9);
-            padding: 40px 20px;
-            font-size: 16px;
-        }
-
-        /* Кастомный autocomplete dropdown */
-        .autocomplete-wrapper {
-            position: relative;
-        }
-
-        .autocomplete-dropdown {
-            display: none;
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            max-height: 200px;
-            overflow-y: auto;
-            background: white;
-            border: 2px solid #667eea;
-            border-top: none;
-            border-radius: 0 0 12px 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            z-index: 1000;
-            margin-top: -12px;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        .autocomplete-dropdown.show {
-            display: block;
-        }
-
-        .autocomplete-item {
-            padding: 12px 16px;
-            cursor: pointer;
-            border-bottom: 1px solid #f0f0f0;
-            font-size: 16px;
-            -webkit-tap-highlight-color: rgba(102, 126, 234, 0.3);
-            user-select: none;
-            touch-action: manipulation;
-        }
-
-        .autocomplete-item:last-child {
-            border-bottom: none;
-        }
-
-        .autocomplete-item:hover,
-        .autocomplete-item:active,
-        .autocomplete-item.highlighted {
-            background: #f0f4ff;
-            color: #667eea;
-        }
-
-        .autocomplete-item:active {
-            background: #e0e7ff;
-        }
-
-        /* Мобильная адаптация */
-        @media (max-width: 480px) {
-            body {
-                padding: 8px;
-            }
-
-            h2 {
-                font-size: 1.4rem;
-            }
-
-            .input-group {
-                padding: 12px;
-            }
-
-            .card-summary {
-                padding: 10px 12px;
-                gap: 6px;
-            }
-
-            .card-summary-left {
-                gap: 6px;
-            }
-
-            .card-summary-partnumber {
-                font-size: 14px;
-            }
-
-            .card-summary-brand {
-                font-size: 11px;
-            }
-
-            .card-summary-right {
-                gap: 6px;
-            }
-
-            .card-summary-price {
-                font-size: 13px;
-            }
-
-            .card-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
-            }
-
-            .card-partnumber {
-                font-size: 1.1em;
-            }
-
-            .site-name {
-                width: 70px;
-                font-size: 13px;
-            }
-
-            .site-price {
-                font-size: 14px;
-            }
-
-            .site-link {
-                padding: 5px 10px;
-                font-size: 11px;
-            }
-        }
+        /* Sort indicator */
+        .sort-asc::after { content: ' ▲'; font-size: 10px; }
+        .sort-desc::after { content: ' ▼'; font-size: 10px; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <h2>AI Purchase Agent</h2>
+<body class="bg-dark-bg text-gray-100 min-h-screen">
+    <div class="max-w-7xl mx-auto p-4 md:p-6">
+        <!-- Header -->
+        <header class="mb-6">
+            <h1 class="text-2xl md:text-3xl font-bold text-center bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent">
+                AI Purchase Agent
+            </h1>
+        </header>
 
-        <div class="input-group">
-            <input id="partnumber" placeholder="Артикул (например: 1351PK)" autocomplete="off">
-            <div class="autocomplete-wrapper">
-                <input id="search-brand" placeholder="Бренд (например: Peugeot) — необязательно" autocomplete="off">
-                <div id="brand-dropdown" class="autocomplete-dropdown"></div>
-            </div>
-            <div class="btn-group">
-                <button onclick="createTask()">Найти</button>
-                <button class="secondary" onclick="loadTasks()">Обновить</button>
+        <!-- Input Form -->
+        <div class="bg-dark-card rounded-xl p-4 mb-6 border border-dark-border shadow-lg">
+            <div class="flex flex-col md:flex-row gap-3">
+                <input
+                    id="partnumber"
+                    type="text"
+                    placeholder="Артикул (например: 1351PK)"
+                    autocomplete="off"
+                    class="flex-1 bg-dark-bg border border-dark-border rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                >
+                <div class="relative flex-1">
+                    <input
+                        id="search-brand"
+                        type="text"
+                        placeholder="Бренд (необязательно)"
+                        autocomplete="off"
+                        class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                    >
+                    <div id="brand-dropdown" class="absolute z-50 w-full mt-1 bg-dark-card border border-dark-border rounded-lg shadow-xl hidden max-h-48 overflow-y-auto"></div>
+                </div>
+                <div class="flex gap-2">
+                    <button
+                        onclick="createTask()"
+                        class="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-lg font-semibold transition-all hover:scale-105 active:scale-95"
+                    >
+                        Найти
+                    </button>
+                    <button
+                        onclick="loadTasks()"
+                        class="px-4 py-3 bg-dark-border hover:bg-dark-hover rounded-lg font-semibold transition"
+                    >
+                        ↻
+                    </button>
+                </div>
             </div>
         </div>
 
-        <div id="tasks-container" class="cards-container">
-            <div class="empty-state">Загрузка...</div>
+        <!-- Stats Bar -->
+        <div id="stats-bar" class="flex gap-4 mb-4 text-sm text-gray-400">
+            <span id="stats-total">Всего: 0</span>
+            <span id="stats-done" class="text-green-400">Готово: 0</span>
+            <span id="stats-pending" class="text-yellow-400">В очереди: 0</span>
+            <span id="stats-error" class="text-red-400">Ошибок: 0</span>
+        </div>
+
+        <!-- Table Container -->
+        <div class="bg-dark-card rounded-xl border border-dark-border shadow-lg overflow-hidden">
+            <!-- Desktop Table -->
+            <div class="hidden md:block overflow-x-auto">
+                <table class="w-full" id="tasks-table">
+                    <thead class="bg-dark-border/50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition" data-sort="id">#</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition" data-sort="partnumber">Артикул</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition" data-sort="brand">Бренд</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition" data-sort="zzap">ZZAP</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition" data-sort="stparts">STparts</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition" data-sort="trast">Trast</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition" data-sort="best">Лучшая</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition" data-sort="date">Дата</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tasks-body" class="divide-y divide-dark-border">
+                        <!-- Rows will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Mobile Cards -->
+            <div id="mobile-cards" class="md:hidden divide-y divide-dark-border">
+                <!-- Cards will be inserted here -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="hidden p-12 text-center text-gray-500">
+                <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <p class="text-lg">Пока нет задач</p>
+                <p class="text-sm mt-1">Введите артикул выше для поиска</p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-state" class="p-12 text-center text-gray-500">
+                <div class="w-8 h-8 mx-auto mb-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                <p>Загрузка...</p>
+            </div>
         </div>
     </div>
+
+    <!-- Expanded Row Details Template (hidden) -->
+    <template id="row-details-template">
+        <tr class="bg-dark-hover/50">
+            <td colspan="8" class="px-4 py-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Site Details -->
+                </div>
+            </td>
+        </tr>
+    </template>
 
     <script>
         const API = '/api/tasks';
 
-        // Список брендов для autocomplete
+        // State
+        let tasks = [];
+        let sortColumn = 'id';
+        let sortDirection = 'desc';
+        let expandedRows = new Set();
+
+        // Brands
         const BRANDS = [
             'Peugeot', 'Citroen', 'Renault', 'Toyota', 'Honda', 'Nissan', 'Mazda',
             'Ford', 'Volkswagen', 'BMW', 'Mercedes', 'Audi', 'Opel', 'Chevrolet',
@@ -528,326 +189,331 @@
             'LuK', 'Gates', 'Continental', 'SKF', 'SNR', 'FAG', 'INA'
         ];
 
-        // Autocomplete для брендов
+        // Autocomplete
         const brandInput = document.getElementById('search-brand');
         const brandDropdown = document.getElementById('brand-dropdown');
-        let highlightedIndex = -1;
-        let dropdownOpen = false;
-        let preventClose = false;
 
-        function showBrandDropdown(filter = '') {
-            const filterLower = filter.toLowerCase();
+        brandInput.addEventListener('focus', () => showDropdown(brandInput.value));
+        brandInput.addEventListener('input', () => showDropdown(brandInput.value));
+        brandInput.addEventListener('blur', () => setTimeout(() => brandDropdown.classList.add('hidden'), 150));
+
+        function showDropdown(filter) {
             const filtered = filter
-                ? BRANDS.filter(b => b.toLowerCase().includes(filterLower))
+                ? BRANDS.filter(b => b.toLowerCase().includes(filter.toLowerCase()))
                 : BRANDS;
 
             if (filtered.length === 0) {
-                closeBrandDropdown();
+                brandDropdown.classList.add('hidden');
                 return;
             }
 
-            highlightedIndex = -1;
-            brandDropdown.innerHTML = filtered.map((brand, idx) => `
-                <div class="autocomplete-item" data-value="${brand}" data-index="${idx}">${brand}</div>
+            brandDropdown.innerHTML = filtered.map(b => `
+                <div class="px-4 py-2 hover:bg-dark-hover cursor-pointer transition" onclick="selectBrand('${b}')">${b}</div>
             `).join('');
-
-            brandDropdown.classList.add('show');
-            dropdownOpen = true;
+            brandDropdown.classList.remove('hidden');
         }
 
-        function closeBrandDropdown() {
-            if (preventClose) return;
-            brandDropdown.classList.remove('show');
-            dropdownOpen = false;
+        function selectBrand(brand) {
+            brandInput.value = brand;
+            brandDropdown.classList.add('hidden');
         }
 
-        function selectBrand(value) {
-            brandInput.value = value;
-            closeBrandDropdown();
-        }
-
-        // Делегирование событий на dropdown контейнер
-        brandDropdown.addEventListener('mousedown', (e) => {
-            // Предотвращаем потерю фокуса input при клике на dropdown
-            e.preventDefault();
-            const item = e.target.closest('.autocomplete-item');
-            if (item) {
-                selectBrand(item.getAttribute('data-value'));
-            }
-        });
-
-        // Touch события - используем делегирование
-        brandDropdown.addEventListener('touchstart', (e) => {
-            preventClose = true; // Не закрывать при blur
-            const item = e.target.closest('.autocomplete-item');
-            if (item) {
-                item.classList.add('highlighted');
-            }
-        }, { passive: true });
-
-        brandDropdown.addEventListener('touchend', (e) => {
-            const item = e.target.closest('.autocomplete-item');
-            if (item) {
-                e.preventDefault();
-                selectBrand(item.getAttribute('data-value'));
-            }
-            preventClose = false;
-        });
-
-        // События для поля ввода бренда
-        brandInput.addEventListener('focus', () => {
-            showBrandDropdown(brandInput.value);
-        });
-
-        brandInput.addEventListener('click', () => {
-            if (!dropdownOpen) {
-                showBrandDropdown(brandInput.value);
-            }
-        });
-
-        brandInput.addEventListener('input', () => {
-            showBrandDropdown(brandInput.value);
-        });
-
-        brandInput.addEventListener('blur', () => {
-            // Задержка чтобы успел сработать клик по dropdown
-            setTimeout(() => {
-                if (!preventClose) {
-                    closeBrandDropdown();
-                }
-            }, 200);
-        });
-
-        brandInput.addEventListener('keydown', (e) => {
-            if (!dropdownOpen) {
-                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                    showBrandDropdown(brandInput.value);
-                    return;
-                }
-                return;
-            }
-
-            const items = brandDropdown.querySelectorAll('.autocomplete-item');
-
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                highlightedIndex = Math.min(highlightedIndex + 1, items.length - 1);
-                updateHighlight(items);
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                highlightedIndex = Math.max(highlightedIndex - 1, 0);
-                updateHighlight(items);
-            } else if (e.key === 'Enter') {
-                e.preventDefault();
-                if (highlightedIndex >= 0 && items[highlightedIndex]) {
-                    selectBrand(items[highlightedIndex].getAttribute('data-value'));
-                } else {
-                    closeBrandDropdown();
-                    createTask();
-                }
-            } else if (e.key === 'Escape') {
-                closeBrandDropdown();
-            }
-        });
-
-        function updateHighlight(items) {
-            items.forEach((item, idx) => {
-                item.classList.toggle('highlighted', idx === highlightedIndex);
-            });
-            if (items[highlightedIndex]) {
-                items[highlightedIndex].scrollIntoView({ block: 'nearest' });
-            }
-        }
-
-        // Закрытие dropdown при клике/тапе вне
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.autocomplete-wrapper')) {
-                closeBrandDropdown();
-            }
-        });
-
-        document.addEventListener('touchend', (e) => {
-            if (!e.target.closest('.autocomplete-wrapper')) {
-                closeBrandDropdown();
-            }
-        });
-
+        // Formatting
         function formatPrice(price) {
-            if (!price) return null;
-            return price.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' ₽';
+            if (!price) return '—';
+            return price.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₽';
         }
 
-        function makeZzapLink(partnumber) {
-            return `https://www.zzap.ru/public/search.aspx?rawdata=${encodeURIComponent(partnumber)}`;
+        function formatDate(dateStr) {
+            if (!dateStr) return '—';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
         }
 
-        function makeStpartsLink(partnumber) {
-            return `https://stparts.ru/search?pcode=${encodeURIComponent(partnumber)}`;
+        function getStatusBadge(status) {
+            const styles = {
+                'DONE': 'bg-green-500/20 text-green-400 border-green-500/30',
+                'ERROR': 'bg-red-500/20 text-red-400 border-red-500/30',
+                'PENDING': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+                'RUNNING': 'bg-blue-500/20 text-blue-400 border-blue-500/30 animate-pulse-slow'
+            };
+            return `<span class="px-2 py-0.5 text-xs font-medium rounded border ${styles[status] || styles['PENDING']}">${status}</span>`;
         }
 
-        function makeTrastLink(partnumber) {
-            return `https://trast-zapchast.ru/search/?query=${encodeURIComponent(partnumber)}`;
+        function getBestPrice(task) {
+            const prices = [
+                { site: 'zzap', price: task.zzap_min_price },
+                { site: 'stparts', price: task.stparts_min_price },
+                { site: 'trast', price: task.trast_min_price }
+            ].filter(p => p.price);
+
+            if (prices.length === 0) return { site: null, price: null };
+            return prices.reduce((a, b) => a.price < b.price ? a : b);
         }
 
-        // Хранение состояния развёрнутых карточек
-        const expandedCards = new Set();
+        function getPriceClass(price, bestSite, currentSite) {
+            if (!price) return 'text-gray-500';
+            if (bestSite === currentSite) return 'text-green-400 font-bold';
+            return 'text-gray-100';
+        }
 
-        function toggleCard(id) {
-            if (expandedCards.has(id)) {
-                expandedCards.delete(id);
+        // Links
+        const makeLink = {
+            zzap: (p) => `https://www.zzap.ru/public/search.aspx?rawdata=${encodeURIComponent(p)}`,
+            stparts: (p) => `https://stparts.ru/search?pcode=${encodeURIComponent(p)}`,
+            trast: (p) => `https://trast-zapchast.ru/?s=${encodeURIComponent(p)}`
+        };
+
+        // Sorting
+        function sortTasks(column) {
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
             } else {
-                expandedCards.add(id);
+                sortColumn = column;
+                sortDirection = column === 'id' ? 'desc' : 'asc';
             }
-            // Перерисовываем только эту карточку
-            const cardEl = document.querySelector(`.card[data-id="${id}"]`);
-            if (cardEl) {
-                cardEl.classList.toggle('expanded', expandedCards.has(id));
+            renderTable();
+            updateSortIndicators();
+        }
+
+        function updateSortIndicators() {
+            document.querySelectorAll('[data-sort]').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc', 'text-white');
+                if (th.dataset.sort === sortColumn) {
+                    th.classList.add(sortDirection === 'asc' ? 'sort-asc' : 'sort-desc', 'text-white');
+                }
+            });
+        }
+
+        function getSortValue(task, column) {
+            switch (column) {
+                case 'id': return task.id;
+                case 'partnumber': return task.partnumber.toLowerCase();
+                case 'brand': return (task.search_brand || task.brand || '').toLowerCase();
+                case 'zzap': return task.zzap_min_price || Infinity;
+                case 'stparts': return task.stparts_min_price || Infinity;
+                case 'trast': return task.trast_min_price || Infinity;
+                case 'best': return task.min_price || Infinity;
+                case 'date': return new Date(task.created_at || 0).getTime();
+                default: return 0;
             }
         }
 
-        function renderCard(task) {
-            const t = task;
-            const isExpanded = expandedCards.has(t.id);
+        // Row expansion
+        function toggleRow(id) {
+            if (expandedRows.has(id)) {
+                expandedRows.delete(id);
+            } else {
+                expandedRows.add(id);
+            }
+            renderTable();
+        }
 
-            // Определяем лучшую цену среди сайтов
-            const prices = [];
-            if (t.zzap_min_price) prices.push({ site: 'zzap', price: t.zzap_min_price });
-            if (t.stparts_min_price) prices.push({ site: 'stparts', price: t.stparts_min_price });
-            if (t.trast_min_price) prices.push({ site: 'trast', price: t.trast_min_price });
+        // Render
+        function renderTable() {
+            const sorted = [...tasks].sort((a, b) => {
+                const aVal = getSortValue(a, sortColumn);
+                const bVal = getSortValue(b, sortColumn);
+                const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+                return sortDirection === 'asc' ? cmp : -cmp;
+            });
 
-            const bestSite = prices.length > 0
-                ? prices.reduce((a, b) => a.price < b.price ? a : b).site
-                : null;
+            // Desktop
+            const tbody = document.getElementById('tasks-body');
+            tbody.innerHTML = sorted.map(t => renderRow(t)).join('');
 
-            // Бренд для отображения (search_brand или brand)
-            const displayBrand = t.search_brand || t.brand || '';
+            // Mobile
+            const mobile = document.getElementById('mobile-cards');
+            mobile.innerHTML = sorted.map(t => renderMobileCard(t)).join('');
 
-            // Цена для свёрнутого вида
-            const summaryPrice = t.min_price ? formatPrice(t.min_price) : '—';
+            // States
+            document.getElementById('loading-state').classList.add('hidden');
+            document.getElementById('empty-state').classList.toggle('hidden', tasks.length > 0);
+            document.getElementById('tasks-body').parentElement.classList.toggle('hidden', tasks.length === 0);
+            document.getElementById('mobile-cards').classList.toggle('hidden', tasks.length === 0);
 
-            // Карточка
+            // Stats
+            updateStats();
+        }
+
+        function renderRow(t) {
+            const best = getBestPrice(t);
+            const isError = t.status === 'ERROR';
+            const isExpanded = expandedRows.has(t.id);
+            const brand = t.search_brand || t.brand || '';
+
+            const rowClass = isError
+                ? 'bg-red-500/10 hover:bg-red-500/20'
+                : 'hover:bg-dark-hover';
+
             let html = `
-                <div class="card ${isExpanded ? 'expanded' : ''}" data-id="${t.id}">
-                    <div class="card-summary" onclick="toggleCard(${t.id})">
-                        <span class="expand-icon">▶</span>
-                        <div class="card-summary-left">
-                            <span class="card-summary-id">#${t.id}</span>
-                            <span class="card-summary-partnumber">${t.partnumber}</span>
-                            ${displayBrand ? `<span class="card-summary-brand">(${displayBrand})</span>` : ''}
+                <tr class="${rowClass} cursor-pointer transition" onclick="toggleRow(${t.id})">
+                    <td class="px-4 py-3 text-gray-500 text-sm">${t.id}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center gap-2">
+                            <span class="font-semibold">${t.partnumber}</span>
+                            ${getStatusBadge(t.status)}
                         </div>
-                        <div class="card-summary-right">
-                            <span class="status-badge status-${t.status}">${t.status}</span>
-                            <span class="card-summary-price ${t.min_price ? '' : 'no-price'}">${summaryPrice}</span>
-                        </div>
-                    </div>
-                    <div class="card-details">
+                    </td>
+                    <td class="px-4 py-3 text-purple-400">${brand || '—'}</td>
+                    <td class="px-4 py-3 text-right ${getPriceClass(t.zzap_min_price, best.site, 'zzap')}">${formatPrice(t.zzap_min_price)}</td>
+                    <td class="px-4 py-3 text-right ${getPriceClass(t.stparts_min_price, best.site, 'stparts')}">${formatPrice(t.stparts_min_price)}</td>
+                    <td class="px-4 py-3 text-right ${getPriceClass(t.trast_min_price, best.site, 'trast')}">${formatPrice(t.trast_min_price)}</td>
+                    <td class="px-4 py-3 text-right">
+                        ${best.price ? `<span class="text-green-400 font-bold">${formatPrice(best.price)}</span>` : '<span class="text-gray-500">—</span>'}
+                    </td>
+                    <td class="px-4 py-3 text-gray-500 text-sm">${formatDate(t.created_at)}</td>
+                </tr>
             `;
 
-            // Лучшая цена (если есть)
-            if (t.min_price) {
-                html += `
-                    <div class="card-best-price">
-                        <span class="best-price-label">Лучшая цена</span>
-                        <span class="best-price-value">${formatPrice(t.min_price)}</span>
-                    </div>
-                `;
+            if (isExpanded) {
+                html += renderExpandedRow(t, best);
             }
-
-            // Список сайтов
-            html += `<div class="card-sites">`;
-
-            // ZZAP
-            const zzapIsBest = bestSite === 'zzap';
-            html += `
-                <div class="site-row ${zzapIsBest ? 'is-best' : ''}">
-                    <span class="site-icon">🔵</span>
-                    <span class="site-name zzap">ZZAP</span>
-                    <span class="site-price ${t.zzap_min_price ? (zzapIsBest ? 'is-best' : '') : 'not-found'}">
-                        ${t.zzap_min_price ? formatPrice(t.zzap_min_price) : (t.status === 'DONE' ? 'не найдено' : '—')}
-                    </span>
-                    ${zzapIsBest ? '<span class="best-tag">ЛУЧШАЯ</span>' : ''}
-                    <a href="${makeZzapLink(t.partnumber)}" target="_blank" class="site-link zzap" onclick="event.stopPropagation()">Открыть</a>
-                </div>
-            `;
-
-            // STparts
-            const stpartsIsBest = bestSite === 'stparts';
-            html += `
-                <div class="site-row ${stpartsIsBest ? 'is-best' : ''}">
-                    <span class="site-icon">🟢</span>
-                    <span class="site-name stparts">STparts</span>
-                    <span class="site-price ${t.stparts_min_price ? (stpartsIsBest ? 'is-best' : '') : 'not-found'}">
-                        ${t.stparts_min_price ? formatPrice(t.stparts_min_price) : (t.status === 'DONE' ? 'не найдено' : '—')}
-                    </span>
-                    ${stpartsIsBest ? '<span class="best-tag">ЛУЧШАЯ</span>' : ''}
-                    <a href="${makeStpartsLink(t.partnumber)}" target="_blank" class="site-link stparts" onclick="event.stopPropagation()">Открыть</a>
-                </div>
-            `;
-
-            // Trast
-            const trastIsBest = bestSite === 'trast';
-            html += `
-                <div class="site-row ${trastIsBest ? 'is-best' : ''}">
-                    <span class="site-icon">🟠</span>
-                    <span class="site-name trast">Trast</span>
-                    <span class="site-price ${t.trast_min_price ? (trastIsBest ? 'is-best' : '') : 'not-found'}">
-                        ${t.trast_min_price ? formatPrice(t.trast_min_price) : (t.status === 'DONE' ? 'не найдено' : '—')}
-                    </span>
-                    ${trastIsBest ? '<span class="best-tag">ЛУЧШАЯ</span>' : ''}
-                    <a href="${makeTrastLink(t.partnumber)}" target="_blank" class="site-link trast" onclick="event.stopPropagation()">Открыть</a>
-                </div>
-            `;
-
-            html += `</div>`; // card-sites
-
-            // Футер со средней ценой
-            if (t.avg_price) {
-                html += `
-                    <div class="card-footer">
-                        <span>Средняя цена:</span>
-                        <span>${formatPrice(t.avg_price)}</span>
-                    </div>
-                `;
-            }
-
-            html += `</div></div>`; // card-details, card
 
             return html;
         }
 
+        function renderExpandedRow(t, best) {
+            const sites = [
+                { key: 'zzap', name: 'ZZAP', color: 'blue', price: t.zzap_min_price, avg: t.zzap_avg_price },
+                { key: 'stparts', name: 'STparts', color: 'green', price: t.stparts_min_price, avg: t.stparts_avg_price },
+                { key: 'trast', name: 'Trast', color: 'orange', price: t.trast_min_price, avg: t.trast_avg_price }
+            ];
+
+            const siteCards = sites.map(s => {
+                const isBest = best.site === s.key;
+                const borderColor = isBest ? 'border-green-500' : 'border-dark-border';
+                const bgColor = isBest ? 'bg-green-500/10' : 'bg-dark-bg';
+
+                return `
+                    <div class="${bgColor} ${borderColor} border rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-semibold text-${s.color}-400">${s.name}</span>
+                            ${isBest ? '<span class="text-xs bg-green-500 text-white px-2 py-0.5 rounded">ЛУЧШАЯ</span>' : ''}
+                        </div>
+                        <div class="text-2xl font-bold ${s.price ? (isBest ? 'text-green-400' : 'text-white') : 'text-gray-500'}">
+                            ${formatPrice(s.price)}
+                        </div>
+                        ${s.avg ? `<div class="text-xs text-gray-500 mt-1">Средняя: ${formatPrice(s.avg)}</div>` : ''}
+                        <a href="${makeLink[s.key](t.partnumber)}" target="_blank"
+                           class="mt-3 block text-center py-2 bg-${s.color}-600 hover:bg-${s.color}-500 rounded transition text-sm font-medium"
+                           onclick="event.stopPropagation()">
+                            Открыть на сайте
+                        </a>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <tr class="bg-dark-hover/30">
+                    <td colspan="8" class="px-4 py-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            ${siteCards}
+                        </div>
+                        ${t.error ? `<div class="mt-3 text-red-400 text-sm bg-red-500/10 rounded p-3">Ошибка: ${t.error}</div>` : ''}
+                    </td>
+                </tr>
+            `;
+        }
+
+        function renderMobileCard(t) {
+            const best = getBestPrice(t);
+            const isError = t.status === 'ERROR';
+            const isExpanded = expandedRows.has(t.id);
+            const brand = t.search_brand || t.brand || '';
+
+            const bgClass = isError ? 'bg-red-500/10' : '';
+
+            return `
+                <div class="p-4 ${bgClass}" onclick="toggleRow(${t.id})">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-gray-500 text-sm">#${t.id}</span>
+                                ${getStatusBadge(t.status)}
+                            </div>
+                            <div class="font-bold text-lg">${t.partnumber}</div>
+                            ${brand ? `<div class="text-purple-400 text-sm">${brand}</div>` : ''}
+                        </div>
+                        <div class="text-right">
+                            ${best.price
+                                ? `<div class="text-green-400 font-bold text-xl">${formatPrice(best.price)}</div>
+                                   <div class="text-xs text-gray-500">лучшая цена</div>`
+                                : '<div class="text-gray-500">—</div>'
+                            }
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 text-sm">
+                        <div class="text-center p-2 bg-dark-bg rounded">
+                            <div class="text-blue-400 text-xs mb-1">ZZAP</div>
+                            <div class="${getPriceClass(t.zzap_min_price, best.site, 'zzap')}">${formatPrice(t.zzap_min_price)}</div>
+                        </div>
+                        <div class="text-center p-2 bg-dark-bg rounded">
+                            <div class="text-green-400 text-xs mb-1">STparts</div>
+                            <div class="${getPriceClass(t.stparts_min_price, best.site, 'stparts')}">${formatPrice(t.stparts_min_price)}</div>
+                        </div>
+                        <div class="text-center p-2 bg-dark-bg rounded">
+                            <div class="text-orange-400 text-xs mb-1">Trast</div>
+                            <div class="${getPriceClass(t.trast_min_price, best.site, 'trast')}">${formatPrice(t.trast_min_price)}</div>
+                        </div>
+                    </div>
+
+                    ${isExpanded ? `
+                        <div class="mt-4 pt-4 border-t border-dark-border grid grid-cols-3 gap-2">
+                            <a href="${makeLink.zzap(t.partnumber)}" target="_blank"
+                               class="py-2 bg-blue-600 hover:bg-blue-500 rounded text-center text-sm font-medium transition"
+                               onclick="event.stopPropagation()">ZZAP</a>
+                            <a href="${makeLink.stparts(t.partnumber)}" target="_blank"
+                               class="py-2 bg-green-600 hover:bg-green-500 rounded text-center text-sm font-medium transition"
+                               onclick="event.stopPropagation()">STparts</a>
+                            <a href="${makeLink.trast(t.partnumber)}" target="_blank"
+                               class="py-2 bg-orange-600 hover:bg-orange-500 rounded text-center text-sm font-medium transition"
+                               onclick="event.stopPropagation()">Trast</a>
+                        </div>
+                        ${t.error ? `<div class="mt-3 text-red-400 text-sm bg-red-500/10 rounded p-3">Ошибка: ${t.error}</div>` : ''}
+                    ` : ''}
+
+                    <div class="text-xs text-gray-500 mt-2">${formatDate(t.created_at)}</div>
+                </div>
+            `;
+        }
+
+        function updateStats() {
+            const total = tasks.length;
+            const done = tasks.filter(t => t.status === 'DONE').length;
+            const pending = tasks.filter(t => t.status === 'PENDING' || t.status === 'RUNNING').length;
+            const error = tasks.filter(t => t.status === 'ERROR').length;
+
+            document.getElementById('stats-total').textContent = `Всего: ${total}`;
+            document.getElementById('stats-done').textContent = `Готово: ${done}`;
+            document.getElementById('stats-pending').textContent = `В очереди: ${pending}`;
+            document.getElementById('stats-error').textContent = `Ошибок: ${error}`;
+        }
+
+        // API
         async function loadTasks() {
             try {
                 const res = await fetch(API);
-                const tasks = await res.json();
-                const container = document.getElementById('tasks-container');
-
-                if (tasks.length === 0) {
-                    container.innerHTML = '<div class="empty-state">Пока нет задач. Введите артикул выше.</div>';
-                    return;
-                }
-
-                container.innerHTML = tasks.map(renderCard).join('');
+                tasks = await res.json();
+                renderTable();
             } catch (e) {
                 console.error('loadTasks error:', e);
             }
         }
 
         async function createTask() {
-            const partnumberInput = document.getElementById('partnumber');
-            const brandInput = document.getElementById('search-brand');
-            const partnumber = partnumberInput.value.trim();
-            const searchBrand = brandInput.value.trim();
+            const partnumber = document.getElementById('partnumber').value.trim();
+            const searchBrand = document.getElementById('search-brand').value.trim();
 
             if (!partnumber) {
-                alert('Введите артикул!');
+                document.getElementById('partnumber').focus();
                 return;
             }
 
             try {
                 const payload = { partnumber };
-                if (searchBrand) {
-                    payload.search_brand = searchBrand;
-                }
+                if (searchBrand) payload.search_brand = searchBrand;
 
                 await fetch(API, {
                     method: 'POST',
@@ -855,32 +521,38 @@
                     body: JSON.stringify(payload)
                 });
 
-                partnumberInput.value = '';
-                brandInput.value = '';
+                document.getElementById('partnumber').value = '';
+                document.getElementById('search-brand').value = '';
                 loadTasks();
             } catch (e) {
                 console.error('createTask error:', e);
-                alert('Ошибка создания задачи!');
             }
         }
 
-        // Enter для создания задачи
+        // Event Listeners
+        document.querySelectorAll('[data-sort]').forEach(th => {
+            th.addEventListener('click', () => sortTasks(th.dataset.sort));
+        });
+
         document.getElementById('partnumber').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') createTask();
+        });
+
+        document.getElementById('search-brand').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
+                brandDropdown.classList.add('hidden');
                 createTask();
             }
         });
 
-        // Enter для search-brand обрабатывается в autocomplete keydown
-
-        // Автообновление каждые 2 секунды
-        setInterval(loadTasks, 2000);
+        // Init
         loadTasks();
+        setInterval(loadTasks, 2000);
+        updateSortIndicators();
 
-        // PWA Service Worker
+        // PWA
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/service-worker.js')
-                .catch((err) => console.error('SW error:', err));
+            navigator.serviceWorker.register('/service-worker.js').catch(console.error);
         }
     </script>
 </body>
