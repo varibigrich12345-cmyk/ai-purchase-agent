@@ -14,25 +14,38 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
+    curl \
     ca-certificates \
     fonts-liberation \
-    libasound2 \
+    fonts-noto-color-emoji \
+    fonts-unifont \
+    libasound2t64 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
     libatspi2.0-0 \
+    libcairo2 \
     libcups2 \
     libdbus-1-3 \
     libdrm2 \
+    libegl1 \
     libgbm1 \
-    libgtk-3-0 \
+    libglib2.0-0t64 \
+    libgtk-3-0t64 \
     libnspr4 \
     libnss3 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
     libwayland-client0 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
     libxcomposite1 \
     libxdamage1 \
+    libxext6 \
     libxfixes3 \
     libxkbcommon0 \
     libxrandr2 \
+    libxshmfence1 \
     xdg-utils \
     libu2f-udev \
     libvulkan1 \
@@ -45,9 +58,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright and Chromium browser
+# Note: We skip 'playwright install-deps' as dependencies are pre-installed above
 RUN pip install playwright && \
-    playwright install chromium && \
-    playwright install-deps chromium
+    playwright install chromium
 
 # Copy application code
 COPY . .
