@@ -483,18 +483,19 @@
                 { key: 'autovid', name: 'AutoVID', color: 'purple', price: t.autovid_min_price }
             ];
 
-            // Vertical list format
+            // Compact list format: Site name, price, [Открыть] button
             const sitesList = sites.map(s => {
                 const isBest = best.site === s.key && s.price;
                 const priceText = s.price ? formatPrice(s.price) : '—';
-                const priceClass = s.price ? (isBest ? 'text-green-400 font-bold' : 'text-white') : 'text-gray-500';
+                const priceDisplay = isBest ? `${priceText} *` : priceText;
+                const priceClass = isBest ? 'text-green-400 font-semibold' : (s.price ? 'text-gray-300' : 'text-gray-500');
                 const link = makeLink[s.key](t.partnumber);
                 return `
-                    <div class="flex items-center justify-between py-1">
-                        <span class="text-${s.color}-400 w-20">${s.name}</span>
-                        <span class="${priceClass} flex-1 text-right mr-3">${priceText}</span>
+                    <div class="flex items-center gap-3 py-1.5 text-sm">
+                        <span class="text-${s.color}-400 font-medium w-20 shrink-0">${s.name}</span>
+                        <span class="${priceClass} flex-1 text-right">${priceDisplay}</span>
                         <a href="${link}" target="_blank"
-                           class="px-2 py-0.5 text-xs bg-dark-border hover:bg-dark-hover rounded transition"
+                           class="px-2.5 py-1 text-xs bg-dark-border hover:bg-dark-hover rounded transition shrink-0"
                            onclick="event.stopPropagation()">Открыть</a>
                     </div>
                 `;
@@ -503,7 +504,7 @@
             return `
                 <div class="px-3 pb-3 pt-1">
                     <!-- Sites List -->
-                    <div class="text-sm">
+                    <div class="space-y-0.5">
                         ${sitesList}
                     </div>
 
