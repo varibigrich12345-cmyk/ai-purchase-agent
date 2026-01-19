@@ -2,12 +2,12 @@
 <html lang="ru" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI Purchase Agent</title>
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#1e1e2e">
+    <meta name="theme-color" content="#0f0f17">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -35,253 +35,182 @@
     </script>
 
     <style>
+        * { -webkit-tap-highlight-color: transparent; }
+
         @keyframes pulse-slow {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
         .animate-pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
 
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #1a1a2e; }
-        ::-webkit-scrollbar-thumb { background: #3a3a5a; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #4a4a6a; }
+        /* Hide scrollbar but keep scroll */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Sort indicator */
-        .sort-asc::after { content: ' ▲'; font-size: 10px; }
-        .sort-desc::after { content: ' ▼'; font-size: 10px; }
-
-        /* Filter button active */
-        .filter-btn.active {
-            background: linear-gradient(135deg, #7c3aed, #3b82f6);
-            color: white;
-        }
-
-        /* Table horizontal scroll on mobile */
-        .table-scroll {
+        /* Horizontal scroll with snap */
+        .site-scroll {
             overflow-x: auto;
+            scroll-snap-type: x mandatory;
             -webkit-overflow-scrolling: touch;
         }
-        .table-scroll table {
-            min-width: 800px;
+        .site-scroll > div {
+            scroll-snap-align: start;
+        }
+
+        /* Day group toggle */
+        .day-toggle::after {
+            content: '';
+            border: solid currentColor;
+            border-width: 0 2px 2px 0;
+            display: inline-block;
+            padding: 3px;
+            transform: rotate(45deg);
+            transition: transform 0.2s;
+            margin-left: 8px;
+        }
+        .day-toggle.collapsed::after {
+            transform: rotate(-45deg);
         }
     </style>
 </head>
 <body class="bg-dark-bg text-gray-100 min-h-screen">
-    <div class="max-w-7xl mx-auto p-4 md:p-6">
+    <div class="max-w-lg mx-auto px-3 py-4">
         <!-- Header -->
-        <header class="mb-6">
-            <h1 class="text-2xl md:text-3xl font-bold text-center bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent">
+        <header class="mb-4">
+            <h1 class="text-xl font-bold text-center bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent">
                 AI Purchase Agent
             </h1>
         </header>
 
         <!-- Input Form -->
-        <div class="bg-dark-card rounded-xl p-4 mb-4 border border-dark-border shadow-lg">
-            <div class="flex flex-col md:flex-row gap-3">
+        <div class="bg-dark-card rounded-xl p-3 mb-3 border border-dark-border">
+            <div class="flex gap-2 mb-2">
                 <input
                     id="partnumber"
                     type="text"
-                    placeholder="Артикул (например: 1351PK)"
+                    placeholder="Артикул"
                     autocomplete="off"
-                    class="flex-1 bg-dark-bg border border-dark-border rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                    class="flex-1 bg-dark-bg border border-dark-border rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                 >
-                <div class="relative flex-1">
-                    <input
-                        id="search-brand"
-                        type="text"
-                        placeholder="Бренд (необязательно)"
-                        autocomplete="off"
-                        class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
-                    >
-                    <div id="brand-dropdown" class="absolute z-50 w-full mt-1 bg-dark-card border border-dark-border rounded-lg shadow-xl hidden max-h-48 overflow-y-auto"></div>
-                </div>
-                <div class="flex gap-2">
-                    <button
-                        onclick="createTask()"
-                        class="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-lg font-semibold transition-all hover:scale-105 active:scale-95"
-                    >
-                        Найти
-                    </button>
-                    <button
-                        onclick="loadTasks()"
-                        class="px-4 py-3 bg-dark-border hover:bg-dark-hover rounded-lg font-semibold transition"
-                        title="Обновить"
-                    >
-                        ↻
-                    </button>
-                </div>
+                <input
+                    id="search-brand"
+                    type="text"
+                    placeholder="Бренд"
+                    autocomplete="off"
+                    class="w-28 bg-dark-bg border border-dark-border rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                >
+            </div>
+            <div class="flex gap-2">
+                <button
+                    onclick="createTask()"
+                    class="flex-1 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-lg font-semibold text-sm transition active:scale-95"
+                >
+                    Найти цены
+                </button>
+                <button
+                    onclick="loadTasks()"
+                    class="px-4 py-2.5 bg-dark-border hover:bg-dark-hover rounded-lg text-lg transition"
+                    title="Обновить"
+                >
+                    ↻
+                </button>
             </div>
         </div>
 
-        <!-- Stats Bar -->
-        <div class="flex flex-wrap gap-4 mb-4 text-sm">
-            <span id="stats-total" class="text-gray-400">Всего: 0</span>
-            <span id="stats-done" class="text-green-400">Готово: 0</span>
-            <span id="stats-pending" class="text-yellow-400">В очереди: 0</span>
-            <span id="stats-error" class="text-red-400">Ошибок: 0</span>
+        <!-- Stats -->
+        <div class="flex justify-between text-xs text-gray-500 mb-3 px-1">
+            <span id="stats-total">0 артикулов</span>
+            <span id="stats-done" class="text-green-500">✓ 0</span>
+            <span id="stats-pending" class="text-yellow-500">⏳ 0</span>
+            <span id="stats-error" class="text-red-500">✗ 0</span>
         </div>
 
         <!-- Filters -->
-        <div class="bg-dark-card rounded-xl p-4 mb-4 border border-dark-border">
-            <div class="flex flex-col md:flex-row gap-4">
-                <!-- Status Filter -->
-                <div class="flex gap-2">
-                    <span class="text-gray-500 text-sm self-center mr-2">Статус:</span>
-                    <button class="filter-btn active px-3 py-1.5 text-sm rounded-lg bg-dark-border hover:bg-dark-hover transition" data-status="all">Все</button>
-                    <button class="filter-btn px-3 py-1.5 text-sm rounded-lg bg-dark-border hover:bg-dark-hover transition" data-status="DONE">Готово</button>
-                    <button class="filter-btn px-3 py-1.5 text-sm rounded-lg bg-dark-border hover:bg-dark-hover transition" data-status="ERROR">Ошибки</button>
-                </div>
-
-                <!-- Date Filter -->
-                <div class="flex gap-2">
-                    <span class="text-gray-500 text-sm self-center mr-2">Период:</span>
-                    <button class="filter-btn active px-3 py-1.5 text-sm rounded-lg bg-dark-border hover:bg-dark-hover transition" data-date="all">Всё</button>
-                    <button class="filter-btn px-3 py-1.5 text-sm rounded-lg bg-dark-border hover:bg-dark-hover transition" data-date="today">Сегодня</button>
-                    <button class="filter-btn px-3 py-1.5 text-sm rounded-lg bg-dark-border hover:bg-dark-hover transition" data-date="week">Неделя</button>
-                </div>
-
-                <!-- Search in history -->
-                <div class="flex-1 md:max-w-xs">
-                    <input
-                        id="history-search"
-                        type="text"
-                        placeholder="Поиск в истории..."
-                        class="w-full bg-dark-bg border border-dark-border rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition"
-                    >
-                </div>
-            </div>
+        <div class="flex gap-2 mb-3 overflow-x-auto no-scrollbar pb-1">
+            <button class="filter-btn active shrink-0 px-3 py-1.5 text-xs rounded-full bg-dark-border transition" data-status="all">Все</button>
+            <button class="filter-btn shrink-0 px-3 py-1.5 text-xs rounded-full bg-dark-border transition" data-status="DONE">Готово</button>
+            <button class="filter-btn shrink-0 px-3 py-1.5 text-xs rounded-full bg-dark-border transition" data-status="ERROR">Ошибки</button>
+            <div class="w-px bg-dark-border mx-1"></div>
+            <button class="filter-btn active shrink-0 px-3 py-1.5 text-xs rounded-full bg-dark-border transition" data-date="all">Всё</button>
+            <button class="filter-btn shrink-0 px-3 py-1.5 text-xs rounded-full bg-dark-border transition" data-date="today">Сегодня</button>
+            <button class="filter-btn shrink-0 px-3 py-1.5 text-xs rounded-full bg-dark-border transition" data-date="week">Неделя</button>
         </div>
 
-        <!-- Table Container -->
-        <div class="bg-dark-card rounded-xl border border-dark-border shadow-lg overflow-hidden">
-            <!-- Desktop Table with horizontal scroll -->
-            <div class="table-scroll">
-                <table class="w-full" id="tasks-table">
-                    <thead class="bg-dark-border/50">
-                        <tr>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition whitespace-nowrap" data-sort="id">#</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition whitespace-nowrap" data-sort="partnumber">Артикул</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition whitespace-nowrap" data-sort="brand">Бренд</th>
-                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition whitespace-nowrap" data-sort="zzap">ZZAP</th>
-                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition whitespace-nowrap" data-sort="stparts">STparts</th>
-                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition whitespace-nowrap" data-sort="trast">Trast</th>
-                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition whitespace-nowrap" data-sort="best">Лучшая</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition whitespace-nowrap" data-sort="date">Дата</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tasks-body" class="divide-y divide-dark-border">
-                        <!-- Rows will be inserted here -->
-                    </tbody>
-                </table>
-            </div>
+        <!-- Tasks Container -->
+        <div id="tasks-container" class="space-y-2">
+            <!-- Day groups will be inserted here -->
+        </div>
 
-            <!-- Mobile Cards (hidden on desktop) -->
-            <div id="mobile-cards" class="hidden divide-y divide-dark-border">
-                <!-- Cards will be inserted here -->
-            </div>
+        <!-- Loading State -->
+        <div id="loading-state" class="py-12 text-center text-gray-500">
+            <div class="w-6 h-6 mx-auto mb-3 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-sm">Загрузка...</p>
+        </div>
 
-            <!-- Empty State -->
-            <div id="empty-state" class="hidden p-12 text-center text-gray-500">
-                <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
-                <p class="text-lg">Ничего не найдено</p>
-                <p class="text-sm mt-1">Попробуйте изменить фильтры</p>
-            </div>
-
-            <!-- Loading State -->
-            <div id="loading-state" class="p-12 text-center text-gray-500">
-                <div class="w-8 h-8 mx-auto mb-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                <p>Загрузка...</p>
-            </div>
-
-            <!-- Pagination -->
-            <div id="pagination" class="hidden border-t border-dark-border px-4 py-3 flex items-center justify-between">
-                <div class="text-sm text-gray-500">
-                    Показано <span id="page-info">1-20 из 100</span>
-                </div>
-                <div class="flex gap-1" id="page-buttons">
-                    <!-- Pagination buttons will be inserted here -->
-                </div>
-            </div>
+        <!-- Empty State -->
+        <div id="empty-state" class="hidden py-12 text-center text-gray-500">
+            <p class="text-4xl mb-2">📦</p>
+            <p class="text-sm">Нет задач</p>
         </div>
     </div>
 
     <script>
         const API = '/api/tasks';
-        const ITEMS_PER_PAGE = 20;
 
         // State
         let allTasks = [];
         let filteredTasks = [];
-        let sortColumn = 'id';
-        let sortDirection = 'desc';
         let expandedRows = new Set();
-        let currentPage = 1;
+        let collapsedDays = new Set();
         let statusFilter = 'all';
         let dateFilter = 'all';
-        let searchQuery = '';
-
-        // Brands
-        const BRANDS = [
-            'Peugeot', 'Citroen', 'Renault', 'Toyota', 'Honda', 'Nissan', 'Mazda',
-            'Ford', 'Volkswagen', 'BMW', 'Mercedes', 'Audi', 'Opel', 'Chevrolet',
-            'Hyundai', 'Kia', 'Mitsubishi', 'Suzuki', 'Subaru', 'Fiat', 'Skoda',
-            'Volvo', 'Land Rover', 'Jeep', 'Lada', 'Bosch', 'Valeo', 'Denso',
-            'NGK', 'Mann', 'Mahle', 'Febi', 'Lemforder', 'TRW', 'ATE', 'Sachs',
-            'LuK', 'Gates', 'Continental', 'SKF', 'SNR', 'FAG', 'INA'
-        ];
-
-        // Autocomplete
-        const brandInput = document.getElementById('search-brand');
-        const brandDropdown = document.getElementById('brand-dropdown');
-
-        brandInput.addEventListener('focus', () => showDropdown(brandInput.value));
-        brandInput.addEventListener('input', () => showDropdown(brandInput.value));
-        brandInput.addEventListener('blur', () => setTimeout(() => brandDropdown.classList.add('hidden'), 150));
-
-        function showDropdown(filter) {
-            const filtered = filter
-                ? BRANDS.filter(b => b.toLowerCase().includes(filter.toLowerCase()))
-                : BRANDS;
-
-            if (filtered.length === 0) {
-                brandDropdown.classList.add('hidden');
-                return;
-            }
-
-            brandDropdown.innerHTML = filtered.map(b => `
-                <div class="px-4 py-2 hover:bg-dark-hover cursor-pointer transition" onclick="selectBrand('${b}')">${b}</div>
-            `).join('');
-            brandDropdown.classList.remove('hidden');
-        }
-
-        function selectBrand(brand) {
-            brandInput.value = brand;
-            brandDropdown.classList.add('hidden');
-        }
 
         // Formatting
         function formatPrice(price) {
             if (!price) return '—';
-            return price.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₽';
+            return Math.round(price).toLocaleString('ru-RU') + '₽';
         }
 
-        function formatDate(dateStr) {
-            if (!dateStr) return '—';
+        function formatDayKey(dateStr) {
+            if (!dateStr) return 'unknown';
             const d = new Date(dateStr);
-            return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         }
 
-        function getStatusBadge(status) {
-            const styles = {
-                'DONE': 'bg-green-500/20 text-green-400 border-green-500/30',
-                'ERROR': 'bg-red-500/20 text-red-400 border-red-500/30',
-                'PENDING': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-                'RUNNING': 'bg-blue-500/20 text-blue-400 border-blue-500/30 animate-pulse-slow'
-            };
-            return `<span class="px-2 py-0.5 text-xs font-medium rounded border ${styles[status] || styles['PENDING']}">${status}</span>`;
+        function formatDayHeader(dayKey, count) {
+            if (dayKey === 'unknown') return `Без даты — ${count}`;
+            const [y, m, d] = dayKey.split('-');
+            const date = new Date(y, m-1, d);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            let label;
+            if (date.toDateString() === today.toDateString()) {
+                label = 'Сегодня';
+            } else if (date.toDateString() === yesterday.toDateString()) {
+                label = 'Вчера';
+            } else {
+                label = `${d}.${m}`;
+            }
+            return `${label} — ${count} артикул${getPlural(count)}`;
+        }
+
+        function getPlural(n) {
+            const mod10 = n % 10;
+            const mod100 = n % 100;
+            if (mod10 === 1 && mod100 !== 11) return '';
+            if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'а';
+            return 'ов';
+        }
+
+        function getStatusIcon(status) {
+            switch(status) {
+                case 'DONE': return '<span class="text-green-500">✓</span>';
+                case 'ERROR': return '<span class="text-red-500">✗</span>';
+                case 'RUNNING': return '<span class="text-blue-500 animate-pulse-slow">●</span>';
+                default: return '<span class="text-yellow-500">⏳</span>';
+            }
         }
 
         function getBestPrice(task) {
@@ -293,12 +222,6 @@
 
             if (prices.length === 0) return { site: null, price: null };
             return prices.reduce((a, b) => a.price < b.price ? a : b);
-        }
-
-        function getPriceClass(price, bestSite, currentSite) {
-            if (!price) return 'text-gray-500';
-            if (bestSite === currentSite) return 'text-green-400 font-bold';
-            return 'text-gray-100';
         }
 
         // Links
@@ -315,345 +238,182 @@
             const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
 
             filteredTasks = allTasks.filter(t => {
-                // Status filter
                 if (statusFilter !== 'all' && t.status !== statusFilter) return false;
-
-                // Date filter
                 if (dateFilter !== 'all') {
                     const taskDate = new Date(t.created_at);
                     if (dateFilter === 'today' && taskDate < today) return false;
                     if (dateFilter === 'week' && taskDate < weekAgo) return false;
                 }
-
-                // Search query
-                if (searchQuery) {
-                    const q = searchQuery.toLowerCase();
-                    const partnumber = (t.partnumber || '').toLowerCase();
-                    const brand = (t.search_brand || t.brand || '').toLowerCase();
-                    if (!partnumber.includes(q) && !brand.includes(q)) return false;
-                }
-
                 return true;
             });
 
-            currentPage = 1;
-            renderTable();
+            render();
         }
 
-        // Sorting
-        function sortTasks(column) {
-            if (sortColumn === column) {
-                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-            } else {
-                sortColumn = column;
-                sortDirection = column === 'id' ? 'desc' : 'asc';
-            }
-            renderTable();
-            updateSortIndicators();
-        }
-
-        function updateSortIndicators() {
-            document.querySelectorAll('[data-sort]').forEach(th => {
-                th.classList.remove('sort-asc', 'sort-desc', 'text-white');
-                if (th.dataset.sort === sortColumn) {
-                    th.classList.add(sortDirection === 'asc' ? 'sort-asc' : 'sort-desc', 'text-white');
-                }
+        // Group by day
+        function groupByDay(tasks) {
+            const groups = {};
+            tasks.forEach(t => {
+                const key = formatDayKey(t.created_at);
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(t);
             });
+
+            // Sort days descending (newest first)
+            const sortedKeys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+            return sortedKeys.map(key => ({
+                day: key,
+                tasks: groups[key].sort((a, b) => b.id - a.id) // Sort tasks by id desc
+            }));
         }
 
-        function getSortValue(task, column) {
-            switch (column) {
-                case 'id': return task.id;
-                case 'partnumber': return task.partnumber.toLowerCase();
-                case 'brand': return (task.search_brand || task.brand || '').toLowerCase();
-                case 'zzap': return task.zzap_min_price || Infinity;
-                case 'stparts': return task.stparts_min_price || Infinity;
-                case 'trast': return task.trast_min_price || Infinity;
-                case 'best': return task.min_price || Infinity;
-                case 'date': return new Date(task.created_at || 0).getTime();
-                default: return 0;
-            }
-        }
-
-        // Row expansion
+        // Toggle
         function toggleRow(id) {
             if (expandedRows.has(id)) {
                 expandedRows.delete(id);
             } else {
                 expandedRows.add(id);
             }
-            renderTable();
+            render();
         }
 
-        // Pagination
-        function goToPage(page) {
-            const totalPages = Math.ceil(filteredTasks.length / ITEMS_PER_PAGE);
-            if (page < 1 || page > totalPages) return;
-            currentPage = page;
-            renderTable();
-        }
-
-        function renderPagination() {
-            const totalItems = filteredTasks.length;
-            const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
-            const pagination = document.getElementById('pagination');
-            const pageInfo = document.getElementById('page-info');
-            const pageButtons = document.getElementById('page-buttons');
-
-            if (totalItems <= ITEMS_PER_PAGE) {
-                pagination.classList.add('hidden');
-                return;
+        function toggleDay(day) {
+            if (collapsedDays.has(day)) {
+                collapsedDays.delete(day);
+            } else {
+                collapsedDays.add(day);
             }
-
-            pagination.classList.remove('hidden');
-
-            const start = (currentPage - 1) * ITEMS_PER_PAGE + 1;
-            const end = Math.min(currentPage * ITEMS_PER_PAGE, totalItems);
-            pageInfo.textContent = `${start}-${end} из ${totalItems}`;
-
-            // Build page buttons
-            let buttons = '';
-
-            // Prev button
-            buttons += `<button onclick="goToPage(${currentPage - 1})" class="px-3 py-1 rounded ${currentPage === 1 ? 'text-gray-600 cursor-not-allowed' : 'bg-dark-border hover:bg-dark-hover'}" ${currentPage === 1 ? 'disabled' : ''}>←</button>`;
-
-            // Page numbers
-            const maxVisiblePages = 5;
-            let startPage = Math.max(1, currentPage - 2);
-            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-            if (endPage - startPage < maxVisiblePages - 1) {
-                startPage = Math.max(1, endPage - maxVisiblePages + 1);
-            }
-
-            if (startPage > 1) {
-                buttons += `<button onclick="goToPage(1)" class="px-3 py-1 rounded bg-dark-border hover:bg-dark-hover">1</button>`;
-                if (startPage > 2) buttons += `<span class="px-2 text-gray-500">...</span>`;
-            }
-
-            for (let i = startPage; i <= endPage; i++) {
-                const isActive = i === currentPage;
-                buttons += `<button onclick="goToPage(${i})" class="px-3 py-1 rounded ${isActive ? 'bg-purple-600 text-white' : 'bg-dark-border hover:bg-dark-hover'}">${i}</button>`;
-            }
-
-            if (endPage < totalPages) {
-                if (endPage < totalPages - 1) buttons += `<span class="px-2 text-gray-500">...</span>`;
-                buttons += `<button onclick="goToPage(${totalPages})" class="px-3 py-1 rounded bg-dark-border hover:bg-dark-hover">${totalPages}</button>`;
-            }
-
-            // Next button
-            buttons += `<button onclick="goToPage(${currentPage + 1})" class="px-3 py-1 rounded ${currentPage === totalPages ? 'text-gray-600 cursor-not-allowed' : 'bg-dark-border hover:bg-dark-hover'}" ${currentPage === totalPages ? 'disabled' : ''}>→</button>`;
-
-            pageButtons.innerHTML = buttons;
+            render();
         }
 
         // Render
-        function renderTable() {
-            // Sort
-            const sorted = [...filteredTasks].sort((a, b) => {
-                const aVal = getSortValue(a, sortColumn);
-                const bVal = getSortValue(b, sortColumn);
-                const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-                return sortDirection === 'asc' ? cmp : -cmp;
-            });
+        function render() {
+            const container = document.getElementById('tasks-container');
+            const groups = groupByDay(filteredTasks);
 
-            // Paginate
-            const start = (currentPage - 1) * ITEMS_PER_PAGE;
-            const pageItems = sorted.slice(start, start + ITEMS_PER_PAGE);
+            if (groups.length === 0) {
+                container.innerHTML = '';
+                document.getElementById('empty-state').classList.remove('hidden');
+                document.getElementById('loading-state').classList.add('hidden');
+                return;
+            }
 
-            // Desktop
-            const tbody = document.getElementById('tasks-body');
-            tbody.innerHTML = pageItems.map(t => renderRow(t)).join('');
-
-            // Mobile
-            const mobile = document.getElementById('mobile-cards');
-            mobile.innerHTML = pageItems.map(t => renderMobileCard(t)).join('');
-
-            // States
+            document.getElementById('empty-state').classList.add('hidden');
             document.getElementById('loading-state').classList.add('hidden');
-            const hasData = pageItems.length > 0;
-            document.getElementById('empty-state').classList.toggle('hidden', hasData);
-            document.querySelector('.table-scroll').classList.toggle('hidden', !hasData);
-            document.getElementById('mobile-cards').classList.toggle('hidden', !hasData);
 
-            // Pagination
-            renderPagination();
-
-            // Stats
+            container.innerHTML = groups.map(g => renderDayGroup(g)).join('');
             updateStats();
         }
 
-        function renderRow(t) {
-            const best = getBestPrice(t);
-            const isError = t.status === 'ERROR';
-            const isExpanded = expandedRows.has(t.id);
-            const brand = t.search_brand || t.brand || '';
+        function renderDayGroup(group) {
+            const isCollapsed = collapsedDays.has(group.day);
+            const header = formatDayHeader(group.day, group.tasks.length);
 
-            const rowClass = isError
-                ? 'bg-red-500/10 hover:bg-red-500/20'
-                : 'hover:bg-dark-hover';
-
-            let html = `
-                <tr class="${rowClass} cursor-pointer transition" onclick="toggleRow(${t.id})">
-                    <td class="px-4 py-3 text-gray-500 text-sm">${t.id}</td>
-                    <td class="px-4 py-3">
-                        <div class="flex items-center gap-2">
-                            <span class="font-semibold">${t.partnumber}</span>
-                            ${getStatusBadge(t.status)}
-                        </div>
-                    </td>
-                    <td class="px-4 py-3 text-purple-400">${brand || '—'}</td>
-                    <td class="px-4 py-3 text-right ${getPriceClass(t.zzap_min_price, best.site, 'zzap')}">${formatPrice(t.zzap_min_price)}</td>
-                    <td class="px-4 py-3 text-right ${getPriceClass(t.stparts_min_price, best.site, 'stparts')}">${formatPrice(t.stparts_min_price)}</td>
-                    <td class="px-4 py-3 text-right ${getPriceClass(t.trast_min_price, best.site, 'trast')}">${formatPrice(t.trast_min_price)}</td>
-                    <td class="px-4 py-3 text-right">
-                        ${best.price ? `<span class="text-green-400 font-bold">${formatPrice(best.price)}</span>` : '<span class="text-gray-500">—</span>'}
-                    </td>
-                    <td class="px-4 py-3 text-gray-500 text-sm whitespace-nowrap">${formatDate(t.created_at)}</td>
-                </tr>
-            `;
-
-            if (isExpanded) {
-                html += renderExpandedRow(t, best);
-            }
-
-            return html;
-        }
-
-        function renderExpandedRow(t, best) {
-            const sites = [
-                { key: 'zzap', name: 'ZZAP', color: 'blue', min: t.zzap_min_price, avg: t.zzap_avg_price, brand: t.zzap_brand },
-                { key: 'stparts', name: 'STparts', color: 'green', min: t.stparts_min_price, avg: t.stparts_avg_price, brand: t.stparts_brand },
-                { key: 'trast', name: 'Trast', color: 'orange', min: t.trast_min_price, avg: t.trast_avg_price, brand: t.trast_brand }
-            ];
-
-            const siteCards = sites.map(s => {
-                const isBest = best.site === s.key && s.min;
-                const borderColor = isBest ? 'border-green-500' : 'border-dark-border';
-                const bgColor = isBest ? 'bg-green-500/10' : 'bg-dark-bg';
-
-                return `
-                    <div class="${bgColor} ${borderColor} border rounded-lg p-4">
-                        <div class="flex justify-between items-center mb-3">
-                            <span class="font-semibold text-${s.color}-400 text-lg">${s.name}</span>
-                            ${isBest ? '<span class="text-xs bg-green-500 text-white px-2 py-0.5 rounded font-medium">ЛУЧШАЯ</span>' : ''}
-                        </div>
-
-                        <div class="space-y-2 mb-4">
-                            <div class="flex justify-between">
-                                <span class="text-gray-500 text-sm">Мин. цена:</span>
-                                <span class="font-bold ${s.min ? (isBest ? 'text-green-400' : 'text-white') : 'text-gray-500'}">${formatPrice(s.min)}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-500 text-sm">Средняя:</span>
-                                <span class="${s.avg ? 'text-gray-300' : 'text-gray-500'}">${formatPrice(s.avg)}</span>
-                            </div>
-                            ${s.brand ? `
-                            <div class="flex justify-between">
-                                <span class="text-gray-500 text-sm">Бренд:</span>
-                                <span class="text-gray-300">${s.brand}</span>
-                            </div>
-                            ` : ''}
-                        </div>
-
-                        <a href="${makeLink[s.key](t.partnumber)}" target="_blank"
-                           class="block w-full text-center py-2.5 bg-${s.color}-600 hover:bg-${s.color}-500 rounded-lg transition text-sm font-semibold"
-                           onclick="event.stopPropagation()">
-                            Открыть на сайте →
-                        </a>
+            return `
+                <div class="bg-dark-card rounded-xl border border-dark-border overflow-hidden">
+                    <!-- Day Header -->
+                    <div
+                        class="day-toggle ${isCollapsed ? 'collapsed' : ''} flex items-center justify-between px-3 py-2.5 bg-dark-border/30 cursor-pointer active:bg-dark-hover"
+                        onclick="toggleDay('${group.day}')"
+                    >
+                        <span class="text-sm font-medium text-gray-300">${header}</span>
                     </div>
-                `;
-            }).join('');
 
-            return `
-                <tr class="bg-dark-hover/30">
-                    <td colspan="8" class="px-4 py-4">
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            ${siteCards}
+                    <!-- Tasks List -->
+                    ${!isCollapsed ? `
+                        <div class="divide-y divide-dark-border/50">
+                            ${group.tasks.map(t => renderTask(t)).join('')}
                         </div>
-                        ${t.error ? `<div class="mt-4 text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-lg p-3"><strong>Ошибка:</strong> ${t.error}</div>` : ''}
-                    </td>
-                </tr>
+                    ` : ''}
+                </div>
             `;
         }
 
-        function renderMobileCard(t) {
+        function renderTask(t) {
             const best = getBestPrice(t);
-            const isError = t.status === 'ERROR';
             const isExpanded = expandedRows.has(t.id);
-            const brand = t.search_brand || t.brand || '';
-
-            const bgClass = isError ? 'bg-red-500/10' : '';
+            const isError = t.status === 'ERROR';
 
             return `
-                <div class="p-4 ${bgClass} cursor-pointer" onclick="toggleRow(${t.id})">
-                    <div class="flex justify-between items-start mb-3">
-                        <div>
-                            <div class="flex items-center gap-2 mb-1">
-                                <span class="text-gray-500 text-sm">#${t.id}</span>
-                                ${getStatusBadge(t.status)}
-                            </div>
-                            <div class="font-bold text-lg">${t.partnumber}</div>
-                            ${brand ? `<div class="text-purple-400 text-sm">${brand}</div>` : ''}
+                <div class="${isError ? 'bg-red-500/5' : ''}">
+                    <!-- Compact Row -->
+                    <div
+                        class="flex items-center gap-3 px-3 py-2.5 cursor-pointer active:bg-dark-hover/50"
+                        onclick="toggleRow(${t.id})"
+                    >
+                        <!-- Status -->
+                        <div class="text-lg">${getStatusIcon(t.status)}</div>
+
+                        <!-- Partnumber + Brand -->
+                        <div class="flex-1 min-w-0">
+                            <div class="font-semibold text-sm truncate">${t.partnumber}</div>
+                            ${t.search_brand || t.brand ? `<div class="text-xs text-purple-400 truncate">${t.search_brand || t.brand}</div>` : ''}
                         </div>
-                        <div class="text-right">
+
+                        <!-- Best Price -->
+                        <div class="text-right shrink-0">
                             ${best.price
-                                ? `<div class="text-green-400 font-bold text-xl">${formatPrice(best.price)}</div>
-                                   <div class="text-xs text-gray-500">лучшая</div>`
-                                : '<div class="text-gray-500">—</div>'
+                                ? `<div class="text-green-400 font-bold text-sm">${formatPrice(best.price)}</div>`
+                                : `<div class="text-gray-500 text-sm">—</div>`
                             }
                         </div>
+
+                        <!-- Expand Arrow -->
+                        <div class="text-gray-500 text-xs">${isExpanded ? '▲' : '▼'}</div>
                     </div>
 
-                    <div class="grid grid-cols-3 gap-2 text-sm">
-                        <div class="text-center p-2 bg-dark-bg rounded">
-                            <div class="text-blue-400 text-xs mb-1">ZZAP</div>
-                            <div class="${getPriceClass(t.zzap_min_price, best.site, 'zzap')}">${formatPrice(t.zzap_min_price)}</div>
-                        </div>
-                        <div class="text-center p-2 bg-dark-bg rounded">
-                            <div class="text-green-400 text-xs mb-1">STparts</div>
-                            <div class="${getPriceClass(t.stparts_min_price, best.site, 'stparts')}">${formatPrice(t.stparts_min_price)}</div>
-                        </div>
-                        <div class="text-center p-2 bg-dark-bg rounded">
-                            <div class="text-orange-400 text-xs mb-1">Trast</div>
-                            <div class="${getPriceClass(t.trast_min_price, best.site, 'trast')}">${formatPrice(t.trast_min_price)}</div>
-                        </div>
+                    <!-- Expanded Details -->
+                    ${isExpanded ? renderExpandedDetails(t, best) : ''}
+                </div>
+            `;
+        }
+
+        function renderExpandedDetails(t, best) {
+            const sites = [
+                { key: 'zzap', name: 'ZZAP', color: 'blue', price: t.zzap_min_price },
+                { key: 'stparts', name: 'STparts', color: 'green', price: t.stparts_min_price },
+                { key: 'trast', name: 'Trast', color: 'orange', price: t.trast_min_price }
+            ];
+
+            return `
+                <div class="px-3 pb-3 pt-1">
+                    <!-- Sites Row - Horizontal Scroll -->
+                    <div class="site-scroll no-scrollbar flex gap-2 -mx-3 px-3">
+                        ${sites.map(s => {
+                            const isBest = best.site === s.key && s.price;
+                            return `
+                                <div class="shrink-0 w-28 ${isBest ? 'bg-green-500/10 border-green-500/50' : 'bg-dark-bg border-dark-border'} border rounded-lg p-2.5">
+                                    <!-- Site Name -->
+                                    <div class="text-${s.color}-400 text-xs font-medium mb-1 flex items-center gap-1">
+                                        ${s.name}
+                                        ${isBest ? '<span class="text-green-400">★</span>' : ''}
+                                    </div>
+
+                                    <!-- Price -->
+                                    <div class="font-bold text-sm mb-2 ${s.price ? (isBest ? 'text-green-400' : 'text-white') : 'text-gray-500'}">
+                                        ${formatPrice(s.price)}
+                                    </div>
+
+                                    <!-- Open Button -->
+                                    <a
+                                        href="${makeLink[s.key](t.partnumber)}"
+                                        target="_blank"
+                                        class="block w-full py-1.5 bg-${s.color}-600 hover:bg-${s.color}-500 rounded text-center text-xs font-medium transition"
+                                        onclick="event.stopPropagation()"
+                                    >
+                                        Открыть
+                                    </a>
+                                </div>
+                            `;
+                        }).join('')}
                     </div>
 
-                    ${isExpanded ? `
-                        <div class="mt-4 pt-4 border-t border-dark-border space-y-3">
-                            <!-- Detailed prices -->
-                            <div class="grid grid-cols-3 gap-2 text-xs">
-                                <div class="text-center">
-                                    <div class="text-gray-500">Средняя</div>
-                                    <div class="text-gray-300">${formatPrice(t.zzap_avg_price)}</div>
-                                </div>
-                                <div class="text-center">
-                                    <div class="text-gray-500">Средняя</div>
-                                    <div class="text-gray-300">${formatPrice(t.stparts_avg_price)}</div>
-                                </div>
-                                <div class="text-center">
-                                    <div class="text-gray-500">Средняя</div>
-                                    <div class="text-gray-300">${formatPrice(t.trast_avg_price)}</div>
-                                </div>
-                            </div>
-
-                            <!-- Buttons -->
-                            <div class="grid grid-cols-3 gap-2">
-                                <a href="${makeLink.zzap(t.partnumber)}" target="_blank"
-                                   class="py-2 bg-blue-600 hover:bg-blue-500 rounded text-center text-sm font-medium transition"
-                                   onclick="event.stopPropagation()">ZZAP</a>
-                                <a href="${makeLink.stparts(t.partnumber)}" target="_blank"
-                                   class="py-2 bg-green-600 hover:bg-green-500 rounded text-center text-sm font-medium transition"
-                                   onclick="event.stopPropagation()">STparts</a>
-                                <a href="${makeLink.trast(t.partnumber)}" target="_blank"
-                                   class="py-2 bg-orange-600 hover:bg-orange-500 rounded text-center text-sm font-medium transition"
-                                   onclick="event.stopPropagation()">Trast</a>
-                            </div>
+                    <!-- Error Message -->
+                    ${t.error_message ? `
+                        <div class="mt-2 text-xs text-red-400 bg-red-500/10 rounded p-2">
+                            ${t.error_message}
                         </div>
-                        ${t.error ? `<div class="mt-3 text-red-400 text-sm bg-red-500/10 rounded p-3">Ошибка: ${t.error}</div>` : ''}
                     ` : ''}
-
-                    <div class="text-xs text-gray-500 mt-3">${formatDate(t.created_at)}</div>
                 </div>
             `;
         }
@@ -664,10 +424,10 @@
             const pending = allTasks.filter(t => t.status === 'PENDING' || t.status === 'RUNNING').length;
             const error = allTasks.filter(t => t.status === 'ERROR').length;
 
-            document.getElementById('stats-total').textContent = `Всего: ${total}`;
-            document.getElementById('stats-done').textContent = `Готово: ${done}`;
-            document.getElementById('stats-pending').textContent = `В очереди: ${pending}`;
-            document.getElementById('stats-error').textContent = `Ошибок: ${error}`;
+            document.getElementById('stats-total').textContent = `${total} артикул${getPlural(total)}`;
+            document.getElementById('stats-done').textContent = `✓ ${done}`;
+            document.getElementById('stats-pending').textContent = `⏳ ${pending}`;
+            document.getElementById('stats-error').textContent = `✗ ${error}`;
         }
 
         // API
@@ -710,61 +470,55 @@
 
         // Event Listeners
 
-        // Sort headers
-        document.querySelectorAll('[data-sort]').forEach(th => {
-            th.addEventListener('click', () => sortTasks(th.dataset.sort));
-        });
-
-        // Status filter buttons
+        // Status filter
         document.querySelectorAll('[data-status]').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('[data-status]').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
+                document.querySelectorAll('[data-status]').forEach(b => {
+                    b.classList.remove('active', 'bg-purple-600');
+                    b.classList.add('bg-dark-border');
+                });
+                btn.classList.add('active', 'bg-purple-600');
+                btn.classList.remove('bg-dark-border');
                 statusFilter = btn.dataset.status;
                 applyFilters();
             });
         });
 
-        // Date filter buttons
+        // Date filter
         document.querySelectorAll('[data-date]').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('[data-date]').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
+                document.querySelectorAll('[data-date]').forEach(b => {
+                    b.classList.remove('active', 'bg-purple-600');
+                    b.classList.add('bg-dark-border');
+                });
+                btn.classList.add('active', 'bg-purple-600');
+                btn.classList.remove('bg-dark-border');
                 dateFilter = btn.dataset.date;
                 applyFilters();
             });
         });
 
-        // History search
-        let searchTimeout;
-        document.getElementById('history-search').addEventListener('input', (e) => {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                searchQuery = e.target.value.trim();
-                applyFilters();
-            }, 300);
-        });
-
-        // Enter to create task
+        // Enter to submit
         document.getElementById('partnumber').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') createTask();
         });
-
         document.getElementById('search-brand').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                brandDropdown.classList.add('hidden');
-                createTask();
-            }
+            if (e.key === 'Enter') createTask();
         });
 
-        // Init
+        // Init active filter styles
+        document.querySelectorAll('.filter-btn.active').forEach(btn => {
+            btn.classList.add('bg-purple-600');
+            btn.classList.remove('bg-dark-border');
+        });
+
+        // Load
         loadTasks();
         setInterval(loadTasks, 3000);
-        updateSortIndicators();
 
         // PWA
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/service-worker.js').catch(console.error);
+            navigator.serviceWorker.register('/service-worker.js').catch(() => {});
         }
     </script>
 </body>
