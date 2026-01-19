@@ -88,17 +88,48 @@ async def process_tasks():
                     )
                     conn.commit()
 
+                    # Таймаут для каждого сайта (120 секунд)
+                    SITE_TIMEOUT = 120
+
                     logger.info("🔵 [1/4] Поиск на ZZAP.ru...")
-                    zzap_result = await zzap_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
+                    try:
+                        zzap_result = await asyncio.wait_for(
+                            zzap_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
+                            timeout=SITE_TIMEOUT
+                        )
+                    except asyncio.TimeoutError:
+                        logger.error(f"  ⏱️ ZZAP: таймаут {SITE_TIMEOUT}с")
+                        zzap_result = {'status': 'timeout', 'prices': None}
 
                     logger.info("🟢 [2/4] Поиск на STparts.ru...")
-                    stparts_result = await stparts_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
+                    try:
+                        stparts_result = await asyncio.wait_for(
+                            stparts_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
+                            timeout=SITE_TIMEOUT
+                        )
+                    except asyncio.TimeoutError:
+                        logger.error(f"  ⏱️ STparts: таймаут {SITE_TIMEOUT}с")
+                        stparts_result = {'status': 'timeout', 'prices': None}
 
                     logger.info("🟠 [3/4] Поиск на Trast.ru (stealth)...")
-                    trast_result = await trast_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
+                    try:
+                        trast_result = await asyncio.wait_for(
+                            trast_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
+                            timeout=SITE_TIMEOUT
+                        )
+                    except asyncio.TimeoutError:
+                        logger.error(f"  ⏱️ Trast: таймаут {SITE_TIMEOUT}с")
+                        trast_result = {'status': 'timeout', 'prices': None}
 
                     logger.info("🟣 [4/4] Поиск на Auto-VID.com...")
-                    autovid_result = await autovid_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
+                    try:
+                        autovid_result = await asyncio.wait_for(
+                            autovid_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
+                            timeout=SITE_TIMEOUT
+                        )
+                    except asyncio.TimeoutError:
+                        logger.error(f"  ⏱️ AutoVID: таймаут {SITE_TIMEOUT}с")
+                        autovid_result = {'status': 'timeout', 'prices': None}
 
                     all_prices = []
                     zzap_min = None

@@ -79,7 +79,35 @@ async def get_task(task_id: int):
     cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
     row = cursor.fetchone()
     conn.close()
-    
+
     if not row:
         raise HTTPException(status_code=404, detail="Task not found")
+    return dict(row)
+
+
+@router.patch("/tasks/{task_id}/cancel")
+async def cancel_task(task_id: int):
+    """Отменить зависшую задачу (пометить как ERROR)"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT status FROM tasks WHERE id = ?", (task_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if row['status'] not in ('PENDING', 'RUNNING'):
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"Cannot cancel task with status {row['status']}")
+
+    cursor.execute(
+        "UPDATE tasks SET status = 'ERROR', error_message = 'Cancelled by user' WHERE id = ?",
+        (task_id,)
+    )
+    conn.commit()
+
+    cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+    row = cursor.fetchone()
+    conn.close()
     return dict(row)
