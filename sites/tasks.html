@@ -217,7 +217,8 @@
             const prices = [
                 { site: 'zzap', price: task.zzap_min_price },
                 { site: 'stparts', price: task.stparts_min_price },
-                { site: 'trast', price: task.trast_min_price }
+                { site: 'trast', price: task.trast_min_price },
+                { site: 'autovid', price: task.autovid_min_price }
             ].filter(p => p.price);
 
             if (prices.length === 0) return { site: null, price: null };
@@ -228,7 +229,8 @@
         const makeLink = {
             zzap: (p) => `https://www.zzap.ru/public/search.aspx?rawdata=${encodeURIComponent(p)}`,
             stparts: (p) => `https://stparts.ru/search?pcode=${encodeURIComponent(p)}`,
-            trast: (p) => `https://trast-zapchast.ru/?s=${encodeURIComponent(p)}`
+            trast: (p) => `https://trast-zapchast.ru/?s=${encodeURIComponent(p)}`,
+            autovid: (p) => `https://auto-vid.com/?s=${encodeURIComponent(p)}&post_type=product`
         };
 
         // Filtering
@@ -372,7 +374,8 @@
             const sites = [
                 { key: 'zzap', name: 'ZZAP', color: 'blue', price: t.zzap_min_price },
                 { key: 'stparts', name: 'STparts', color: 'green', price: t.stparts_min_price },
-                { key: 'trast', name: 'Trast', color: 'orange', price: t.trast_min_price }
+                { key: 'trast', name: 'Trast', color: 'orange', price: t.trast_min_price },
+                { key: 'autovid', name: 'AutoVID', color: 'purple', price: t.autovid_min_price }
             ];
 
             return `

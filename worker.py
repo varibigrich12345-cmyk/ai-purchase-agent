@@ -23,6 +23,7 @@ import sqlite3
 from zzap_cdp_client import ZZapCDPClient
 from stparts_cdp_client import STPartsCDPClient
 from trast_cdp_client import TrastCDPClient  # Stealth mode с обходом JS-challenge
+from autovid_cdp_client import AutoVidCDPClient  # Auto-VID с WooCommerce
 from config import DB_PATH
 
 logging.basicConfig(
@@ -53,10 +54,11 @@ async def process_tasks():
     # Подключаемся к Chrome через CDP
     logger.info("🔧 Подключение к Chrome CDP...")
 
-    async with ZZapCDPClient() as zzap_client, STPartsCDPClient() as stparts_client, TrastCDPClient() as trast_client:
+    async with ZZapCDPClient() as zzap_client, STPartsCDPClient() as stparts_client, TrastCDPClient() as trast_client, AutoVidCDPClient() as autovid_client:
         logger.info("  ✅ ZZAP клиент подключён")
         logger.info("  ✅ STparts клиент подключён")
         logger.info("  ✅ Trast клиент подключён (stealth режим)")
+        logger.info("  ✅ AutoVID клиент подключён")
         logger.info("✅ Все клиенты готовы к работе!")
 
         while True:
@@ -86,19 +88,23 @@ async def process_tasks():
                     )
                     conn.commit()
 
-                    logger.info("🔵 [1/3] Поиск на ZZAP.ru...")
+                    logger.info("🔵 [1/4] Поиск на ZZAP.ru...")
                     zzap_result = await zzap_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
 
-                    logger.info("🟢 [2/3] Поиск на STparts.ru...")
+                    logger.info("🟢 [2/4] Поиск на STparts.ru...")
                     stparts_result = await stparts_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
 
-                    logger.info("🟠 [3/3] Поиск на Trast.ru (stealth)...")
+                    logger.info("🟠 [3/4] Поиск на Trast.ru (stealth)...")
                     trast_result = await trast_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
+
+                    logger.info("🟣 [4/4] Поиск на Auto-VID.com...")
+                    autovid_result = await autovid_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
 
                     all_prices = []
                     zzap_min = None
                     stparts_min = None
                     trast_min = None
+                    autovid_min = None
                     brand = None
 
                     if zzap_result.get('status') in ['DONE', 'success'] and zzap_result.get('prices'):
@@ -137,6 +143,18 @@ async def process_tasks():
                     else:
                         logger.warning(f"  ⚠️ Trast: {trast_result.get('status', 'error')}")
 
+                    if autovid_result.get('status') == 'success' and autovid_result.get('prices'):
+                        autovid_min = autovid_result['prices'].get('min')
+                        if autovid_min:
+                            all_prices.append(autovid_min)
+                            logger.info(f"  ✅ AutoVID: {autovid_min}₽")
+                        # Получаем бренд из AutoVID если не нашли ранее
+                        if not brand and autovid_result.get('brand'):
+                            brand = autovid_result['brand']
+                            logger.info(f"  🏷️ Бренд (AutoVID): {brand}")
+                    else:
+                        logger.warning(f"  ⚠️ AutoVID: {autovid_result.get('status', 'error')}")
+
                     if all_prices:
                         min_price = min(all_prices)
                         avg_price = round(sum(all_prices) / len(all_prices), 2)
@@ -149,6 +167,7 @@ async def process_tasks():
                                 zzap_min_price = ?,
                                 stparts_min_price = ?,
                                 trast_min_price = ?,
+                                autovid_min_price = ?,
                                 brand = ?,
                                 result_url = ?,
                                 completed_at = CURRENT_TIMESTAMP
@@ -159,8 +178,9 @@ async def process_tasks():
                                 zzap_min,
                                 stparts_min,
                                 trast_min,
+                                autovid_min,
                                 brand,
-                                zzap_result.get('url') or stparts_result.get('url') or trast_result.get('url'),
+                                zzap_result.get('url') or stparts_result.get('url') or trast_result.get('url') or autovid_result.get('url'),
                                 task_id
                             )
                         )
@@ -176,9 +196,11 @@ async def process_tasks():
                             logger.info(f"   🟢 STparts: {stparts_min}₽")
                         if trast_min:
                             logger.info(f"   🟠 Trast: {trast_min}₽")
+                        if autovid_min:
+                            logger.info(f"   🟣 AutoVID: {autovid_min}₽")
 
                     else:
-                        error_msg = f"ZZAP: {zzap_result.get('status')}, STparts: {stparts_result.get('status')}, Trast: {trast_result.get('status')}"
+                        error_msg = f"ZZAP: {zzap_result.get('status')}, STparts: {stparts_result.get('status')}, Trast: {trast_result.get('status')}, AutoVID: {autovid_result.get('status')}"
                         cursor.execute(
                             """UPDATE tasks SET
                                 status = 'ERROR',

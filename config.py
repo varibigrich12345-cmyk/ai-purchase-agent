@@ -12,6 +12,10 @@ STPARTS_PASSWORD = os.getenv("STPARTS_PASSWORD", "SSSsss@12345678")
 TRAST_LOGIN = os.getenv("TRAST_LOGIN", "")
 TRAST_PASSWORD = os.getenv("TRAST_PASSWORD", "")
 
+# auto-vid.com credentials
+AUTOVID_LOGIN = os.getenv("AUTOVID_LOGIN", "danik.servis@mail.ru")
+AUTOVID_PASSWORD = os.getenv("AUTOVID_PASSWORD", "AAAAaaaa@12345678")
+
 # Database - use env var for Docker, fallback to local for development
 DB_PATH = Path(os.getenv("DATABASE_PATH", str(BASEDIR / "tasks.db")))
 
