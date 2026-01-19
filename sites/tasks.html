@@ -154,6 +154,48 @@
         </div>
     </div>
 
+    <!-- Brand Selection Modal -->
+    <div id="brand-modal" class="fixed inset-0 z-50 hidden">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-black/70" onclick="closeBrandModal()"></div>
+
+        <!-- Modal Content -->
+        <div class="absolute inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto bg-dark-card rounded-2xl border border-dark-border overflow-hidden">
+            <!-- Header -->
+            <div class="px-4 py-3 bg-dark-border/30 border-b border-dark-border">
+                <h3 class="text-lg font-semibold text-center">Выберите бренд</h3>
+                <p id="brand-modal-partnumber" class="text-sm text-purple-400 text-center mt-1"></p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="brand-modal-loading" class="py-8 text-center">
+                <div class="w-6 h-6 mx-auto mb-3 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                <p class="text-sm text-gray-400">Загрузка брендов с ZZAP...</p>
+            </div>
+
+            <!-- Brands List -->
+            <div id="brand-modal-list" class="hidden max-h-64 overflow-y-auto">
+                <!-- Brands will be inserted here -->
+            </div>
+
+            <!-- No Brands Found -->
+            <div id="brand-modal-empty" class="hidden py-8 text-center text-gray-500">
+                <p class="text-3xl mb-2">🔍</p>
+                <p class="text-sm">Бренды не найдены</p>
+                <button onclick="submitTaskWithoutBrand()" class="mt-4 px-4 py-2 bg-dark-border hover:bg-dark-hover rounded-lg text-sm transition">
+                    Искать без бренда
+                </button>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-4 py-3 border-t border-dark-border flex justify-end">
+                <button onclick="closeBrandModal()" class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">
+                    Отмена
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API = '/api/tasks';
 
@@ -444,6 +486,9 @@
             }
         }
 
+        // Pending partnumber for brand selection
+        let pendingPartnumber = null;
+
         async function createTask() {
             const partnumber = document.getElementById('partnumber').value.trim();
             const searchBrand = document.getElementById('search-brand').value.trim();
@@ -453,9 +498,93 @@
                 return;
             }
 
+            // Если бренд уже указан - сразу создаём задачу
+            if (searchBrand) {
+                await submitTask(partnumber, searchBrand);
+                return;
+            }
+
+            // Иначе - показываем модальное окно выбора бренда
+            pendingPartnumber = partnumber;
+            await showBrandModal(partnumber);
+        }
+
+        async function showBrandModal(partnumber) {
+            const modal = document.getElementById('brand-modal');
+            const loading = document.getElementById('brand-modal-loading');
+            const list = document.getElementById('brand-modal-list');
+            const empty = document.getElementById('brand-modal-empty');
+
+            // Reset state
+            loading.classList.remove('hidden');
+            list.classList.add('hidden');
+            empty.classList.add('hidden');
+            list.innerHTML = '';
+
+            // Show modal
+            document.getElementById('brand-modal-partnumber').textContent = partnumber;
+            modal.classList.remove('hidden');
+
+            try {
+                // Fetch brands from API
+                const res = await fetch(`/api/brands?partnumber=${encodeURIComponent(partnumber)}`);
+                const brands = await res.json();
+
+                loading.classList.add('hidden');
+
+                if (brands.length === 0) {
+                    empty.classList.remove('hidden');
+                    return;
+                }
+
+                // Если только один бренд - сразу используем его
+                if (brands.length === 1) {
+                    closeBrandModal();
+                    await submitTask(partnumber, brands[0]);
+                    return;
+                }
+
+                // Render brands list
+                list.innerHTML = brands.map(brand => `
+                    <button
+                        onclick="selectBrand('${brand.replace(/'/g, "\\'")}')"
+                        class="w-full px-4 py-3 text-left hover:bg-dark-hover border-b border-dark-border/50 transition flex items-center justify-between group"
+                    >
+                        <span class="font-medium">${brand}</span>
+                        <span class="text-purple-400 opacity-0 group-hover:opacity-100 transition">→</span>
+                    </button>
+                `).join('');
+
+                list.classList.remove('hidden');
+
+            } catch (e) {
+                console.error('showBrandModal error:', e);
+                loading.classList.add('hidden');
+                empty.classList.remove('hidden');
+            }
+        }
+
+        function closeBrandModal() {
+            document.getElementById('brand-modal').classList.add('hidden');
+            pendingPartnumber = null;
+        }
+
+        async function selectBrand(brand) {
+            if (!pendingPartnumber) return;
+            closeBrandModal();
+            await submitTask(pendingPartnumber, brand);
+        }
+
+        async function submitTaskWithoutBrand() {
+            if (!pendingPartnumber) return;
+            closeBrandModal();
+            await submitTask(pendingPartnumber, null);
+        }
+
+        async function submitTask(partnumber, brand) {
             try {
                 const payload = { partnumber };
-                if (searchBrand) payload.search_brand = searchBrand;
+                if (brand) payload.search_brand = brand;
 
                 await fetch(API, {
                     method: 'POST',
@@ -467,7 +596,7 @@
                 document.getElementById('search-brand').value = '';
                 loadTasks();
             } catch (e) {
-                console.error('createTask error:', e);
+                console.error('submitTask error:', e);
             }
         }
 

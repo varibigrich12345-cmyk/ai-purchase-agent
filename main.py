@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pathlib import Path
 from backend.api.tasks_api import router as tasks_router
+from backend.api.brands_api import router as brands_router
 
 BASEDIR = Path(__file__).resolve().parent
 
@@ -18,8 +19,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# API роутер
+# API роутеры
 app.include_router(tasks_router, prefix="/api", tags=["tasks"])
+app.include_router(brands_router, prefix="/api", tags=["brands"])
 
 # НОВОЕ: Редирект с корня на tasks.html
 @app.get("/")

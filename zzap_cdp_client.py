@@ -225,6 +225,73 @@ class ZZapCDPClient(BaseBrowserClient):
             logger.error(f"[zzap] Ошибка выбора бренда в модальном окне: {e}")
             return False
 
+    async def get_brands_for_partnumber(self, partnumber: str) -> List[str]:
+        """Получить список брендов для артикула с ZZAP.
+
+        Делает быстрый запрос к ZZAP и извлекает список брендов из модального окна.
+
+        Args:
+            partnumber: Артикул для поиска
+
+        Returns:
+            Список брендов (например: ['TOYOPOWER', 'TRIALLI', 'GATES'])
+        """
+        brands = []
+
+        try:
+            url = f"{self.BASE_URL}/public/search.aspx?rawdata={partnumber}"
+            logger.info(f"[zzap] Получение брендов для: {partnumber}")
+
+            await self.page.goto(url, wait_until='domcontentloaded', timeout=30000)
+            await asyncio.sleep(2)
+
+            # Ждём модальное окно с выбором бренда
+            modal_popup = self.page.locator('#ctl00_TopPanel_HeaderPlace_GridLayoutSearchControl_SearchSuggestPopupControl_PWC-1')
+
+            try:
+                await modal_popup.wait_for(state='visible', timeout=8000)
+                logger.info("[zzap] Модальное окно появилось")
+
+                # Извлекаем бренды из строк
+                rows = modal_popup.locator("tr[id*='DXDataRow']")
+                count = await rows.count()
+                logger.info(f"[zzap] Найдено {count} вариантов брендов")
+
+                for i in range(count):
+                    row = rows.nth(i)
+                    row_text = await row.inner_text()
+
+                    # Формат строки: "BRAND\tPARTNUMBER\tDescription"
+                    # Извлекаем первую часть - бренд
+                    parts = row_text.strip().split('\t')
+                    if parts:
+                        brand = parts[0].strip()
+                        if brand and brand not in brands:
+                            brands.append(brand)
+
+                logger.info(f"[zzap] Найденные бренды: {brands}")
+
+                # Закрываем модальное окно (Escape)
+                await self.page.keyboard.press('Escape')
+                await asyncio.sleep(0.5)
+
+            except PlaywrightTimeout:
+                logger.info("[zzap] Модальное окно не появилось - возможно только один бренд")
+
+                # Пробуем извлечь бренд из таблицы результатов
+                try:
+                    await self.page.wait_for_selector('#ctl00_BodyPlace_SearchGridView_DXMainTable', timeout=10000)
+                    data = await self._extract_prices_and_brand()
+                    if data.get('brand'):
+                        brands.append(data['brand'])
+                except:
+                    pass
+
+        except Exception as e:
+            logger.error(f"[zzap] Ошибка получения брендов: {e}")
+
+        return brands
+
     async def _extract_prices_and_brand(self, brand_filter: str = None) -> Dict[str, Any]:
         """Извлечь цены и бренд из таблицы результатов zzap.ru.
 
