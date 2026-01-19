@@ -384,11 +384,6 @@ class AutoVidCDPClient(BaseBrowserClient):
                 await self.page.wait_for_timeout(8000)  # Больше времени для JS
 
             logger.info(f"[{self.SITE_NAME}] Поиск: {partnumber}")
-            logger.info(f"[{self.SITE_NAME}] URL после загрузки: {self.page.url}")
-
-            # Debug: проверяем содержимое страницы
-            page_title = await self.page.title()
-            logger.info(f"[{self.SITE_NAME}] Заголовок страницы: {page_title}")
 
             # Если указан brand_filter, фильтруем результаты
             if brand_filter:
@@ -478,20 +473,6 @@ class AutoVidCDPClient(BaseBrowserClient):
             if len(products) == 0:
                 logger.warning(f"[{self.SITE_NAME}] Товары не найдены стандартными селекторами")
 
-                # Debug: логируем часть содержимого страницы
-                try:
-                    page_text = await self.page.inner_text('body')
-                    # Первые 500 символов текста
-                    logger.info(f"[{self.SITE_NAME}] Текст страницы (500 симв): {page_text[:500]}")
-                    # Ищем ключевые слова
-                    has_price = '₽' in page_text or 'руб' in page_text.lower()
-                    has_cart = 'корзин' in page_text.lower() or 'cart' in page_text.lower()
-                    logger.info(f"[{self.SITE_NAME}] Найдены цены: {has_price}, корзина: {has_cart}")
-                    # Логируем классы основного контейнера
-                    main_classes = await self.page.evaluate("Array.from(document.querySelectorAll('[class*=\"product\"]')).slice(0,5).map(el => el.className)")
-                    logger.info(f"[{self.SITE_NAME}] Классы с 'product': {main_classes}")
-                except Exception as dbg_e:
-                    logger.debug(f"[{self.SITE_NAME}] Debug error: {dbg_e}")
 
                 # Попробуем найти цены напрямую из элементов цены WooCommerce
                 price_elements = await self.page.locator('.price, .woocommerce-Price-amount, [class*="price"]').all()
