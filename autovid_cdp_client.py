@@ -434,6 +434,18 @@ class AutoVidCDPClient(BaseBrowserClient):
             if len(products) == 0:
                 logger.warning(f"[{self.SITE_NAME}] Товары не найдены стандартными селекторами")
 
+                # Debug: логируем часть HTML страницы
+                try:
+                    html_snippet = await self.page.inner_html('body')
+                    # Ищем признаки товаров в HTML
+                    if 'woocommerce' in html_snippet.lower():
+                        logger.info(f"[{self.SITE_NAME}] WooCommerce обнаружен на странице")
+                    # Логируем классы основного контейнера
+                    main_classes = await self.page.evaluate("Array.from(document.querySelectorAll('[class*=\"product\"]')).slice(0,5).map(el => el.className)")
+                    logger.info(f"[{self.SITE_NAME}] Классы с 'product': {main_classes}")
+                except Exception as dbg_e:
+                    logger.debug(f"[{self.SITE_NAME}] Debug error: {dbg_e}")
+
                 # Попробуем найти цены напрямую из элементов цены WooCommerce
                 price_elements = await self.page.locator('.price, .woocommerce-Price-amount, [class*="price"]').all()
                 logger.info(f"[{self.SITE_NAME}] Найдено {len(price_elements)} элементов с ценами")
