@@ -409,71 +409,100 @@ class AutoVidCDPClient(BaseBrowserClient):
         try:
             await self.page.wait_for_timeout(2000)
 
-            # WooCommerce структура - товары в .products или ul.products
-            products = await self.page.locator('.product, .products li.product').all()
-            logger.info(f"[{self.SITE_NAME}] Найдено {len(products)} товаров")
+            # Проверяем наличие результатов
+            page_text = await self.page.inner_text('body')
+            if 'ничего не найдено' in page_text.lower() or 'no products' in page_text.lower():
+                logger.info(f"[{self.SITE_NAME}] Товары не найдены")
+                return {'prices': [], 'brand': None}
+
+            # WooCommerce структура - различные селекторы для товаров
+            product_selectors = [
+                'ul.products li.product',
+                '.products .product',
+                'li.product',
+                '.product-item',
+                'article.product',
+            ]
+
+            products = []
+            for selector in product_selectors:
+                products = await self.page.locator(selector).all()
+                if len(products) > 0:
+                    logger.info(f"[{self.SITE_NAME}] Найдено {len(products)} товаров ({selector})")
+                    break
 
             if len(products) == 0:
-                # Попробуем другие селекторы
-                products = await self.page.locator('[class*="product"]').all()
-                logger.info(f"[{self.SITE_NAME}] Альтернативный поиск: {len(products)} элементов")
+                logger.warning(f"[{self.SITE_NAME}] Товары не найдены стандартными селекторами")
+
+                # Попробуем найти цены напрямую из элементов цены WooCommerce
+                price_elements = await self.page.locator('.price, .woocommerce-Price-amount, [class*="price"]').all()
+                logger.info(f"[{self.SITE_NAME}] Найдено {len(price_elements)} элементов с ценами")
+
+                for el in price_elements:
+                    try:
+                        price_text = await el.inner_text()
+                        # Пробуем извлечь цену
+                        match = re.search(r'([\d\s\xa0,.]+)\s*[₽руб]', price_text)
+                        if match:
+                            price_str = match.group(1).replace(" ", "").replace("\xa0", "").replace(",", ".").strip()
+                            if price_str:
+                                val = float(price_str)
+                                if 10 < val < 500000:
+                                    prices.append(val)
+                    except:
+                        continue
+
+                unique_prices = list(set(prices))
+                if unique_prices:
+                    logger.info(f"[{self.SITE_NAME}] Цены из элементов: {sorted(unique_prices)[:5]}")
+                return {'prices': unique_prices, 'brand': brand}
 
             for product in products:
                 try:
                     product_text = await product.inner_text()
                     total_count += 1
 
-                    # Извлекаем бренд/производителя
-                    product_brand = None
-
-                    # Пробуем найти бренд в атрибутах товара
-                    brand_selectors = [
-                        '.brand', '.manufacturer', '.product-brand',
-                        '[class*="brand"]', '[class*="manufacturer"]'
-                    ]
-                    for sel in brand_selectors:
-                        try:
-                            brand_el = product.locator(sel).first
-                            if await brand_el.count() > 0:
-                                product_brand = (await brand_el.inner_text()).strip()
-                                break
-                        except:
-                            continue
-
-                    # Если бренд в тексте товара
-                    if not product_brand and brand_filter:
-                        if brand_filter.lower() in product_text.lower():
-                            product_brand = brand_filter
-
-                    # Фильтрация по бренду
+                    # Фильтрация по бренду через текст товара (название/описание)
                     if brand_filter:
-                        if product_brand and brand_filter.lower() not in product_brand.lower():
-                            continue
-                        elif not product_brand and brand_filter.lower() not in product_text.lower():
+                        if brand_filter.lower() not in product_text.lower():
+                            logger.debug(f"[{self.SITE_NAME}] Товар пропущен (бренд не совпадает)")
                             continue
 
                     filtered_count += 1
 
-                    # Сохраняем первый найденный бренд
-                    if not brand and product_brand:
-                        brand = product_brand
+                    # Пробуем найти бренд в названии товара
+                    if not brand and brand_filter:
+                        brand = brand_filter
 
-                    # Извлекаем цену
-                    # WooCommerce форматы: "1 234 ₽", "1234₽", "1 234,00 ₽"
-                    price_patterns = [
-                        r'([\d\s\xa0]+(?:[,\.]\d{2})?)\s*₽',
-                        r'([\d\s\xa0]+(?:[,\.]\d{2})?)\s*руб',
-                        r'([\d\s\xa0]+(?:[,\.]\d{2})?)\s*р\.',
-                    ]
+                    # Извлекаем цену из элемента .price или .woocommerce-Price-amount
+                    price_el = product.locator('.price, .woocommerce-Price-amount').first
+                    if await price_el.count() > 0:
+                        price_text = await price_el.inner_text()
+                        logger.debug(f"[{self.SITE_NAME}] Текст цены: {price_text}")
 
-                    for pattern in price_patterns:
-                        price_matches = re.findall(pattern, product_text)
+                        # WooCommerce может показывать старую и новую цену: "300₽ 215.04₽"
+                        # Берём последнюю (актуальную) цену
+                        price_matches = re.findall(r'([\d\s\xa0,.]+)\s*[₽руб]', price_text)
                         for price_str in price_matches:
                             try:
                                 price_clean = price_str.replace(" ", "").replace("\xa0", "").replace(",", ".").strip()
                                 if price_clean:
                                     val = float(price_clean)
-                                    if 100 < val < 500000:
+                                    # Снизили минимум до 10₽ для дешёвых товаров
+                                    if 10 < val < 500000:
+                                        prices.append(val)
+                                        logger.debug(f"[{self.SITE_NAME}] Найдена цена: {val}₽")
+                            except ValueError:
+                                continue
+                    else:
+                        # Fallback: ищем цену в тексте товара
+                        price_matches = re.findall(r'([\d\s\xa0,.]+)\s*[₽руб]', product_text)
+                        for price_str in price_matches:
+                            try:
+                                price_clean = price_str.replace(" ", "").replace("\xa0", "").replace(",", ".").strip()
+                                if price_clean:
+                                    val = float(price_clean)
+                                    if 10 < val < 500000:
                                         prices.append(val)
                             except ValueError:
                                 continue
@@ -481,22 +510,6 @@ class AutoVidCDPClient(BaseBrowserClient):
                 except Exception as e:
                     logger.debug(f"[{self.SITE_NAME}] Ошибка парсинга товара: {e}")
                     continue
-
-            # Если товары не найдены, попробуем парсить текст страницы
-            if not prices:
-                page_text = await self.page.inner_text('body')
-
-                # Ищем цены в тексте
-                price_matches = re.findall(r'([\d\s\xa0]{1,15})\s*₽', page_text)
-                for price_str in price_matches:
-                    try:
-                        price_clean = price_str.replace(" ", "").replace("\xa0", "").strip()
-                        if price_clean:
-                            val = float(price_clean)
-                            if 100 < val < 500000:
-                                prices.append(val)
-                    except ValueError:
-                        continue
 
         except Exception as e:
             logger.error(f"[{self.SITE_NAME}] Ошибка извлечения данных: {e}")
@@ -507,6 +520,8 @@ class AutoVidCDPClient(BaseBrowserClient):
         unique_prices = list(set(prices))
         if unique_prices:
             logger.info(f"[{self.SITE_NAME}] Найдено {len(unique_prices)} уникальных цен: {sorted(unique_prices)[:5]}...")
+        else:
+            logger.warning(f"[{self.SITE_NAME}] Цены не найдены")
 
         return {'prices': unique_prices, 'brand': brand}
 

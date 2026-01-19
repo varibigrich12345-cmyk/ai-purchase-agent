@@ -350,25 +350,36 @@ class ZZapCDPClient(BaseBrowserClient):
                                     logger.info(f"[zzap] Найден бренд: {brand}")
 
                     # Если указан фильтр по бренду - пропускаем строки с другим брендом
-                    if brand_filter and row_brand:
+                    if brand_filter:
                         total_count += 1
+                        # Если не удалось определить бренд строки - пропускаем
+                        if not row_brand:
+                            continue
                         if brand_filter.lower() not in row_brand.lower():
                             continue
                         filtered_count += 1
 
-                    # Ищем цены в ячейках
-                    for cell in cells:
+                    # Ищем цены ТОЛЬКО в ячейках с классом pricewhitecell (основная цена)
+                    # Пропускаем служебные ячейки и минимальный заказ
+                    price_cells = await row.locator("td.pricewhitecell").all()
+
+                    for cell in price_cells:
                         cell_text = await cell.inner_text()
 
-                        # Ищем цену: число + "р."
-                        if "р." in cell_text and "Заказ от" not in cell_text:
-                            match = re.search(r"^(\d[\d\s]*)\s*р\.", cell_text.strip())
+                        # Пропускаем ячейки с минимальным заказом, сроком и т.п.
+                        if any(x in cell_text.lower() for x in ['заказ от', 'дн.', 'дней', 'шт.']):
+                            continue
+
+                        # Ищем цену: число + "р." (не обязательно в начале)
+                        if "р." in cell_text:
+                            match = re.search(r'(\d[\d\s\xa0]*)\s*р\.', cell_text.strip())
                             if match:
                                 price_str = match.group(1).replace(" ", "").replace("\xa0", "")
                                 try:
                                     price = float(price_str)
-                                    if 100 < price < 500000:
+                                    if 50 < price < 500000:
                                         prices.append(price)
+                                        logger.debug(f"[zzap] Цена: {price}₽ (бренд: {row_brand})")
                                 except ValueError:
                                     continue
 
