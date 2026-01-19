@@ -345,6 +345,11 @@ class AutoVidCDPClient(BaseBrowserClient):
             await self.page.wait_for_timeout(3000)
 
             logger.info(f"[{self.SITE_NAME}] Поиск: {partnumber}")
+            logger.info(f"[{self.SITE_NAME}] URL после загрузки: {self.page.url}")
+
+            # Debug: проверяем содержимое страницы
+            page_title = await self.page.title()
+            logger.info(f"[{self.SITE_NAME}] Заголовок страницы: {page_title}")
 
             # Если указан brand_filter, фильтруем результаты
             if brand_filter:
@@ -434,12 +439,15 @@ class AutoVidCDPClient(BaseBrowserClient):
             if len(products) == 0:
                 logger.warning(f"[{self.SITE_NAME}] Товары не найдены стандартными селекторами")
 
-                # Debug: логируем часть HTML страницы
+                # Debug: логируем часть содержимого страницы
                 try:
-                    html_snippet = await self.page.inner_html('body')
-                    # Ищем признаки товаров в HTML
-                    if 'woocommerce' in html_snippet.lower():
-                        logger.info(f"[{self.SITE_NAME}] WooCommerce обнаружен на странице")
+                    page_text = await self.page.inner_text('body')
+                    # Первые 500 символов текста
+                    logger.info(f"[{self.SITE_NAME}] Текст страницы (500 симв): {page_text[:500]}")
+                    # Ищем ключевые слова
+                    has_price = '₽' in page_text or 'руб' in page_text.lower()
+                    has_cart = 'корзин' in page_text.lower() or 'cart' in page_text.lower()
+                    logger.info(f"[{self.SITE_NAME}] Найдены цены: {has_price}, корзина: {has_cart}")
                     # Логируем классы основного контейнера
                     main_classes = await self.page.evaluate("Array.from(document.querySelectorAll('[class*=\"product\"]')).slice(0,5).map(el => el.className)")
                     logger.info(f"[{self.SITE_NAME}] Классы с 'product': {main_classes}")
