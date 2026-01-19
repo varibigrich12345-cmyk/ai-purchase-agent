@@ -71,19 +71,29 @@ class ZZapCDPClient(BaseBrowserClient):
             await self.page.goto(url, wait_until='domcontentloaded', timeout=30000)
             await asyncio.sleep(3)
 
-            # Обработка модального окна выбора
+            # Обработка модального окна выбора бренда
             modal_popup = self.page.locator('#ctl00_TopPanel_HeaderPlace_GridLayoutSearchControl_SearchSuggestPopupControl_PWC-1')
 
             try:
                 await modal_popup.wait_for(state='visible', timeout=5000)
-                logger.info("[zzap] Модальное окно - выбираем первый вариант")
 
-                first_row = self.page.locator('#ctl00_TopPanel_HeaderPlace_GridLayoutSearchControl_SearchSuggestPopupControl_SearchSuggestGridView_DXDataRow0')
+                if brand_filter:
+                    # Ищем строку с нужным брендом
+                    logger.info(f"[zzap] Модальное окно - ищем бренд '{brand_filter}'")
+                    clicked = await self._select_brand_in_modal(modal_popup, brand_filter)
+                    if not clicked:
+                        logger.warning(f"[zzap] Бренд '{brand_filter}' не найден в модальном окне, выбираем первый")
+                        first_row = self.page.locator('#ctl00_TopPanel_HeaderPlace_GridLayoutSearchControl_SearchSuggestPopupControl_SearchSuggestGridView_DXDataRow0')
+                        if await first_row.count() > 0:
+                            await first_row.click(timeout=5000)
+                else:
+                    logger.info("[zzap] Модальное окно - выбираем первый вариант")
+                    first_row = self.page.locator('#ctl00_TopPanel_HeaderPlace_GridLayoutSearchControl_SearchSuggestPopupControl_SearchSuggestGridView_DXDataRow0')
+                    if await first_row.count() > 0:
+                        await first_row.click(timeout=5000)
 
-                if await first_row.count() > 0:
-                    await first_row.click(timeout=5000)
-                    await modal_popup.wait_for(state='hidden', timeout=5000)
-                    logger.info("[zzap] Модальное окно закрылось")
+                await modal_popup.wait_for(state='hidden', timeout=5000)
+                logger.info("[zzap] Модальное окно закрылось")
 
             except PlaywrightTimeout:
                 logger.info("[zzap] Модальное окно не появилось")
@@ -174,6 +184,46 @@ class ZZapCDPClient(BaseBrowserClient):
             'prices': None,
             'url': self.page.url if self.page else None
         }
+
+    async def _select_brand_in_modal(self, modal_popup, brand_filter: str) -> bool:
+        """Найти и выбрать нужный бренд в модальном окне ZZAP.
+
+        Args:
+            modal_popup: Локатор модального окна
+            brand_filter: Название бренда для поиска (case-insensitive)
+
+        Returns:
+            True если нашли и кликнули, False иначе
+        """
+        try:
+            # Получаем все строки в модальном окне (DevExpress grid)
+            rows = modal_popup.locator("tr[id*='DXDataRow']")
+            count = await rows.count()
+            logger.info(f"[zzap] В модальном окне {count} вариантов")
+
+            found_brands = []
+            brand_filter_lower = brand_filter.lower()
+
+            for i in range(count):
+                row = rows.nth(i)
+                row_text = await row.inner_text()
+                row_text_clean = row_text.strip()
+
+                if row_text_clean:
+                    found_brands.append(row_text_clean[:50])  # Для логирования
+
+                # Case-insensitive сравнение
+                if brand_filter_lower in row_text.lower():
+                    logger.info(f"[zzap] Найден бренд '{brand_filter}' в строке: {row_text_clean[:50]}")
+                    await row.click(timeout=5000)
+                    return True
+
+            logger.info(f"[zzap] Доступные варианты: {found_brands}")
+            return False
+
+        except Exception as e:
+            logger.error(f"[zzap] Ошибка выбора бренда в модальном окне: {e}")
+            return False
 
     async def _extract_prices_and_brand(self, brand_filter: str = None) -> Dict[str, Any]:
         """Извлечь цены и бренд из таблицы результатов zzap.ru.
