@@ -85,7 +85,7 @@ async def get_task(task_id: int):
     return dict(row)
 
 
-@router.patch("/tasks/{task_id}/cancel")
+@router.post("/tasks/{task_id}/cancel")
 async def cancel_task(task_id: int):
     """Отменить зависшую задачу (пометить как ERROR)"""
     conn = get_db()
