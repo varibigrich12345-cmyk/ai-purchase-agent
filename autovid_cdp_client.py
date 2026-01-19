@@ -473,55 +473,42 @@ class AutoVidCDPClient(BaseBrowserClient):
             if len(products) == 0:
                 logger.warning(f"[{self.SITE_NAME}] Товары не найдены стандартными селекторами")
 
+                # Попробуем найти товарные блоки по OpenCart структуре (product-layout)
+                products = await self.page.locator('.product-layout, .product-thumb').all()
+                logger.info(f"[{self.SITE_NAME}] Найдено {len(products)} товаров (OpenCart)")
 
-                # Попробуем найти цены напрямую из элементов цены WooCommerce
-                price_elements = await self.page.locator('.price, .woocommerce-Price-amount, [class*="price"]').all()
-                logger.info(f"[{self.SITE_NAME}] Найдено {len(price_elements)} элементов с ценами")
-
-                for el in price_elements:
-                    try:
-                        price_text = await el.inner_text()
-                        # Пробуем извлечь цену
-                        match = re.search(r'([\d\s\xa0,.]+)\s*[₽руб]', price_text)
-                        if match:
-                            price_str = match.group(1).replace(" ", "").replace("\xa0", "").replace(",", ".").strip()
-                            if price_str:
-                                val = float(price_str)
-                                if 10 < val < 500000:
-                                    prices.append(val)
-                    except:
-                        continue
-
-                unique_prices = list(set(prices))
-                if unique_prices:
-                    logger.info(f"[{self.SITE_NAME}] Цены из элементов: {sorted(unique_prices)[:5]}")
-                return {'prices': unique_prices, 'brand': brand}
-
+            # Обрабатываем найденные товары
             for product in products:
                 try:
                     product_text = await product.inner_text()
                     total_count += 1
 
-                    # Фильтрация по бренду через текст товара (название/описание)
+                    # ФИЛЬТР: Проверяем наличие на складе
+                    # Пропускаем товары "Нет в наличии"
+                    out_of_stock_markers = ['нет в наличии', 'нет на складе', 'out of stock', 'недоступен']
+                    is_out_of_stock = any(marker in product_text.lower() for marker in out_of_stock_markers)
+                    if is_out_of_stock:
+                        logger.debug(f"[{self.SITE_NAME}] Товар пропущен (нет в наличии)")
+                        continue
+
+                    # ФИЛЬТР: Проверяем бренд
                     if brand_filter:
                         if brand_filter.lower() not in product_text.lower():
-                            logger.debug(f"[{self.SITE_NAME}] Товар пропущен (бренд не совпадает)")
+                            logger.debug(f"[{self.SITE_NAME}] Товар пропущен (бренд не совпадает): {product_text[:50]}...")
                             continue
 
                     filtered_count += 1
 
-                    # Пробуем найти бренд в названии товара
+                    # Сохраняем бренд
                     if not brand and brand_filter:
                         brand = brand_filter
 
-                    # Извлекаем цену из элемента .price или .woocommerce-Price-amount
-                    price_el = product.locator('.price, .woocommerce-Price-amount').first
+                    # Извлекаем цену
+                    price_el = product.locator('.price, .price-new, [class*="price"]').first
                     if await price_el.count() > 0:
                         price_text = await price_el.inner_text()
-                        logger.debug(f"[{self.SITE_NAME}] Текст цены: {price_text}")
 
-                        # WooCommerce может показывать старую и новую цену: "300₽ 215.04₽"
-                        # Берём последнюю (актуальную) цену
+                        # Берём все цены и выбираем минимальную (актуальную)
                         price_matches = re.findall(r'([\d\s\xa0,.]+)\s*[₽руб]', price_text)
                         for price_str in price_matches:
                             try:
@@ -554,8 +541,8 @@ class AutoVidCDPClient(BaseBrowserClient):
         except Exception as e:
             logger.error(f"[{self.SITE_NAME}] Ошибка извлечения данных: {e}")
 
-        if brand_filter and total_count > 0:
-            logger.info(f"[{self.SITE_NAME}] Отфильтровано по бренду '{brand_filter}': {filtered_count}/{total_count} товаров")
+        if total_count > 0:
+            logger.info(f"[{self.SITE_NAME}] Обработано товаров: {filtered_count}/{total_count} (в наличии + бренд '{brand_filter or 'любой'}')")
 
         unique_prices = list(set(prices))
         if unique_prices:

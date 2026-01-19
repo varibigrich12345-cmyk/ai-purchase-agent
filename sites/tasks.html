@@ -74,7 +74,7 @@
     </style>
 </head>
 <body class="bg-dark-bg text-gray-100 min-h-screen">
-    <div class="max-w-lg mx-auto px-3 py-4">
+    <div class="max-w-6xl mx-auto px-3 py-4">
         <!-- Header -->
         <header class="mb-4">
             <h1 class="text-xl font-bold text-center bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent">
@@ -345,8 +345,71 @@
             document.getElementById('empty-state').classList.add('hidden');
             document.getElementById('loading-state').classList.add('hidden');
 
-            container.innerHTML = groups.map(g => renderDayGroup(g)).join('');
+            // Desktop: table view, Mobile: card view
+            const isDesktop = window.innerWidth >= 768;
+            if (isDesktop) {
+                container.innerHTML = renderDesktopTable(filteredTasks);
+            } else {
+                container.innerHTML = groups.map(g => renderDayGroup(g)).join('');
+            }
             updateStats();
+        }
+
+        function renderDesktopTable(tasks) {
+            return `
+                <div class="bg-dark-card rounded-xl border border-dark-border overflow-hidden">
+                    <table class="w-full text-sm">
+                        <thead class="bg-dark-border/50">
+                            <tr class="text-left text-gray-400 text-xs uppercase">
+                                <th class="px-4 py-3 font-medium">Статус</th>
+                                <th class="px-4 py-3 font-medium">Артикул</th>
+                                <th class="px-4 py-3 font-medium">Бренд</th>
+                                <th class="px-4 py-3 font-medium text-right text-blue-400">ZZAP</th>
+                                <th class="px-4 py-3 font-medium text-right text-green-400">STparts</th>
+                                <th class="px-4 py-3 font-medium text-right text-orange-400">Trast</th>
+                                <th class="px-4 py-3 font-medium text-right text-purple-400">AutoVID</th>
+                                <th class="px-4 py-3 font-medium text-right">Лучшая</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-dark-border/50">
+                            ${tasks.map(t => renderDesktopRow(t)).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function renderDesktopRow(t) {
+            const best = getBestPrice(t);
+            const isError = t.status === 'ERROR';
+
+            const priceCell = (price, siteKey, colorClass) => {
+                if (!price) return '<span class="text-gray-500">—</span>';
+                const isBest = best.site === siteKey;
+                const link = makeLink[siteKey](t.partnumber);
+                return `
+                    <span class="${isBest ? 'text-green-400 font-bold' : colorClass}">${formatPrice(price)}</span>
+                    <a href="${link}" target="_blank" class="ml-1 text-gray-500 hover:text-white">↗</a>
+                `;
+            };
+
+            return `
+                <tr class="${isError ? 'bg-red-500/5' : 'hover:bg-dark-hover/30'}">
+                    <td class="px-4 py-3">${getStatusIcon(t.status)}</td>
+                    <td class="px-4 py-3 font-semibold">${t.partnumber}</td>
+                    <td class="px-4 py-3 text-purple-400">${t.search_brand || t.brand || '—'}</td>
+                    <td class="px-4 py-3 text-right">${priceCell(t.zzap_min_price, 'zzap', 'text-blue-300')}</td>
+                    <td class="px-4 py-3 text-right">${priceCell(t.stparts_min_price, 'stparts', 'text-green-300')}</td>
+                    <td class="px-4 py-3 text-right">${priceCell(t.trast_min_price, 'trast', 'text-orange-300')}</td>
+                    <td class="px-4 py-3 text-right">${priceCell(t.autovid_min_price, 'autovid', 'text-purple-300')}</td>
+                    <td class="px-4 py-3 text-right font-bold ${best.price ? 'text-green-400' : 'text-gray-500'}">${formatPrice(best.price)}</td>
+                </tr>
+                ${isError && t.error_message ? `
+                    <tr class="bg-red-500/5">
+                        <td colspan="8" class="px-4 py-2 text-xs text-red-400">${t.error_message}</td>
+                    </tr>
+                ` : ''}
+            `;
         }
 
         function renderDayGroup(group) {
@@ -420,37 +483,20 @@
                 { key: 'autovid', name: 'AutoVID', color: 'purple', price: t.autovid_min_price }
             ];
 
+            // Single line format: ZZAP: 288₽ ↗ | STparts: — | ...
+            const sitesLine = sites.map(s => {
+                const isBest = best.site === s.key && s.price;
+                const priceText = s.price ? formatPrice(s.price) : '—';
+                const priceClass = s.price ? (isBest ? 'text-green-400 font-bold' : 'text-white') : 'text-gray-500';
+                const link = makeLink[s.key](t.partnumber);
+                return `<span class="text-${s.color}-400">${s.name}:</span> <span class="${priceClass}">${priceText}</span>${s.price ? ` <a href="${link}" target="_blank" class="text-gray-400 hover:text-white" onclick="event.stopPropagation()">↗</a>` : ''}`;
+            }).join(' <span class="text-dark-border">|</span> ');
+
             return `
                 <div class="px-3 pb-3 pt-1">
-                    <!-- Sites Row - Horizontal Scroll -->
-                    <div class="site-scroll no-scrollbar flex gap-2 -mx-3 px-3">
-                        ${sites.map(s => {
-                            const isBest = best.site === s.key && s.price;
-                            return `
-                                <div class="shrink-0 w-28 ${isBest ? 'bg-green-500/10 border-green-500/50' : 'bg-dark-bg border-dark-border'} border rounded-lg p-2.5">
-                                    <!-- Site Name -->
-                                    <div class="text-${s.color}-400 text-xs font-medium mb-1 flex items-center gap-1">
-                                        ${s.name}
-                                        ${isBest ? '<span class="text-green-400">★</span>' : ''}
-                                    </div>
-
-                                    <!-- Price -->
-                                    <div class="font-bold text-sm mb-2 ${s.price ? (isBest ? 'text-green-400' : 'text-white') : 'text-gray-500'}">
-                                        ${formatPrice(s.price)}
-                                    </div>
-
-                                    <!-- Open Button -->
-                                    <a
-                                        href="${makeLink[s.key](t.partnumber)}"
-                                        target="_blank"
-                                        class="block w-full py-1.5 bg-${s.color}-600 hover:bg-${s.color}-500 rounded text-center text-xs font-medium transition"
-                                        onclick="event.stopPropagation()"
-                                    >
-                                        Открыть
-                                    </a>
-                                </div>
-                            `;
-                        }).join('')}
+                    <!-- Sites Line -->
+                    <div class="text-xs leading-relaxed">
+                        ${sitesLine}
                     </div>
 
                     <!-- Error Message -->
@@ -642,6 +688,13 @@
         document.querySelectorAll('.filter-btn.active').forEach(btn => {
             btn.classList.add('bg-purple-600');
             btn.classList.remove('bg-dark-border');
+        });
+
+        // Handle resize for desktop/mobile view switching
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(render, 100);
         });
 
         // Load
