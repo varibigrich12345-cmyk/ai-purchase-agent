@@ -339,10 +339,28 @@ class AutoVidCDPClient(BaseBrowserClient):
             brand_filter: Фильтр по бренду (необязательно)
         """
         try:
-            # Формируем URL поиска
-            search_url = f"{self.BASE_URL}/?s={partnumber}&post_type=product"
-            await self.page.goto(search_url, wait_until='networkidle', timeout=60000)
-            await self.page.wait_for_timeout(3000)
+            # Сначала проверяем авторизацию
+            if not await self.check_auth():
+                logger.warning(f"[{self.SITE_NAME}] Сессия истекла, повторный вход...")
+                await self.auto_login()
+
+            # Используем поиск через форму на главной странице
+            await self.page.goto(self.BASE_URL, wait_until='domcontentloaded', timeout=30000)
+            await self.page.wait_for_timeout(2000)
+
+            # Ищем поле поиска
+            search_input = self.page.locator('input[type="search"], input[name="s"], .search-field, #s')
+            if await search_input.count() > 0:
+                logger.info(f"[{self.SITE_NAME}] Найдено поле поиска, вводим: {partnumber}")
+                await search_input.first.fill(partnumber)
+                await self.page.keyboard.press('Enter')
+                await self.page.wait_for_timeout(5000)  # Ждём результаты
+            else:
+                # Fallback: прямой URL
+                search_url = f"{self.BASE_URL}/?s={partnumber}&post_type=product"
+                logger.info(f"[{self.SITE_NAME}] Поле поиска не найдено, используем URL: {search_url}")
+                await self.page.goto(search_url, wait_until='networkidle', timeout=60000)
+                await self.page.wait_for_timeout(5000)
 
             logger.info(f"[{self.SITE_NAME}] Поиск: {partnumber}")
             logger.info(f"[{self.SITE_NAME}] URL после загрузки: {self.page.url}")
