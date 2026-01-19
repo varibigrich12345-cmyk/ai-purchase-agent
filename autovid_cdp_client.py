@@ -339,28 +339,49 @@ class AutoVidCDPClient(BaseBrowserClient):
             brand_filter: Фильтр по бренду (необязательно)
         """
         try:
-            # Сначала проверяем авторизацию
+            # Сначала переходим на главную страницу
+            await self.page.goto(self.BASE_URL, wait_until='load', timeout=60000)
+            await self.page.wait_for_timeout(3000)
+
+            # Проверяем авторизацию
             if not await self.check_auth():
                 logger.warning(f"[{self.SITE_NAME}] Сессия истекла, повторный вход...")
                 await self.auto_login()
 
-            # Используем поиск через форму на главной странице
-            await self.page.goto(self.BASE_URL, wait_until='domcontentloaded', timeout=30000)
-            await self.page.wait_for_timeout(2000)
+            # Ищем поле поиска на странице с различными селекторами
+            search_selectors = [
+                'input[type="search"]',
+                'input[name="s"]',
+                '.search-field',
+                '#s',
+                'input.dgwt-wcas-search-input',  # WooCommerce AJAX search
+                '.woocommerce-product-search input',
+                'form.search-form input[type="text"]',
+                'header input[type="text"]',
+            ]
 
-            # Ищем поле поиска
-            search_input = self.page.locator('input[type="search"], input[name="s"], .search-field, #s')
-            if await search_input.count() > 0:
-                logger.info(f"[{self.SITE_NAME}] Найдено поле поиска, вводим: {partnumber}")
-                await search_input.first.fill(partnumber)
+            search_input = None
+            for sel in search_selectors:
+                try:
+                    loc = self.page.locator(sel).first
+                    if await loc.is_visible(timeout=1000):
+                        search_input = loc
+                        logger.info(f"[{self.SITE_NAME}] Найдено поле поиска: {sel}")
+                        break
+                except:
+                    continue
+
+            if search_input:
+                await search_input.fill(partnumber)
                 await self.page.keyboard.press('Enter')
-                await self.page.wait_for_timeout(5000)  # Ждём результаты
+                await self.page.wait_for_load_state('networkidle', timeout=30000)
+                await self.page.wait_for_timeout(5000)  # Дополнительное ожидание для AJAX
             else:
                 # Fallback: прямой URL
                 search_url = f"{self.BASE_URL}/?s={partnumber}&post_type=product"
                 logger.info(f"[{self.SITE_NAME}] Поле поиска не найдено, используем URL: {search_url}")
-                await self.page.goto(search_url, wait_until='networkidle', timeout=60000)
-                await self.page.wait_for_timeout(5000)
+                await self.page.goto(search_url, wait_until='load', timeout=60000)
+                await self.page.wait_for_timeout(8000)  # Больше времени для JS
 
             logger.info(f"[{self.SITE_NAME}] Поиск: {partnumber}")
             logger.info(f"[{self.SITE_NAME}] URL после загрузки: {self.page.url}")
