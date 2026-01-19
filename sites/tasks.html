@@ -483,20 +483,28 @@
                 { key: 'autovid', name: 'AutoVID', color: 'purple', price: t.autovid_min_price }
             ];
 
-            // Single line format: ZZAP: 288₽ ↗ | STparts: — | ...
-            const sitesLine = sites.map(s => {
+            // Vertical list format
+            const sitesList = sites.map(s => {
                 const isBest = best.site === s.key && s.price;
                 const priceText = s.price ? formatPrice(s.price) : '—';
                 const priceClass = s.price ? (isBest ? 'text-green-400 font-bold' : 'text-white') : 'text-gray-500';
                 const link = makeLink[s.key](t.partnumber);
-                return `<span class="text-${s.color}-400">${s.name}:</span> <span class="${priceClass}">${priceText}</span>${s.price ? ` <a href="${link}" target="_blank" class="text-gray-400 hover:text-white" onclick="event.stopPropagation()">↗</a>` : ''}`;
-            }).join(' <span class="text-dark-border">|</span> ');
+                return `
+                    <div class="flex items-center justify-between py-1">
+                        <span class="text-${s.color}-400 w-20">${s.name}</span>
+                        <span class="${priceClass} flex-1 text-right mr-3">${priceText}</span>
+                        <a href="${link}" target="_blank"
+                           class="px-2 py-0.5 text-xs bg-dark-border hover:bg-dark-hover rounded transition"
+                           onclick="event.stopPropagation()">Открыть</a>
+                    </div>
+                `;
+            }).join('');
 
             return `
                 <div class="px-3 pb-3 pt-1">
-                    <!-- Sites Line -->
-                    <div class="text-xs leading-relaxed">
-                        ${sitesLine}
+                    <!-- Sites List -->
+                    <div class="text-sm">
+                        ${sitesList}
                     </div>
 
                     <!-- Error Message -->
