@@ -720,33 +720,27 @@
         let brandAutocompleteTimeout = null;
         let currentBrandSuggestions = [];
 
+        // Статический список брендов для автозаполнения (не зависит от API)
+        const defaultBrands = [
+            'Peugeot', 'Citroen', 'Renault', 'BMW', 'Mercedes', 'Audi', 'VW', 'Toyota',
+            'Ford', 'Hyundai', 'Kia', 'Nissan', 'Bosch', 'Febi', 'Lemforder', 'TRW',
+            'ATE', 'Sachs', 'LuK', 'SKF', 'SNR', 'FAG', 'INA', 'Gates', 'Contitech',
+            'Dayco', 'NGK', 'Denso', 'Valeo', 'Hella', 'PEUGEOT CITROEN', 'Groupe PSA'
+        ];
+
         async function loadBrandSuggestions(query) {
             if (!query || query.length < 2) {
                 hideBrandDropdown();
                 return;
             }
 
-            try {
-                const partnumber = document.getElementById('partnumber').value.trim();
-                if (!partnumber) {
-                    hideBrandDropdown();
-                    return;
-                }
+            // Фильтруем по статическому списку брендов (без обращения к API)
+            const filtered = defaultBrands.filter(brand =>
+                brand.toLowerCase().includes(query.toLowerCase())
+            );
 
-                const res = await fetch(`/api/brands?partnumber=${encodeURIComponent(partnumber)}`);
-                const brands = await res.json();
-                
-                // Filter brands by query (case-insensitive)
-                const filtered = brands.filter(brand => 
-                    brand.toLowerCase().includes(query.toLowerCase())
-                );
-
-                currentBrandSuggestions = filtered;
-                showBrandDropdown(filtered);
-            } catch (e) {
-                console.error('loadBrandSuggestions error:', e);
-                hideBrandDropdown();
-            }
+            currentBrandSuggestions = filtered;
+            showBrandDropdown(filtered);
         }
 
         function showBrandDropdown(brands) {
