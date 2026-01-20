@@ -115,9 +115,7 @@
                         class="w-full bg-dark-bg border border-dark-border rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                     >
                     <!-- Brand Autocomplete Dropdown -->
-                    <div id="brand-dropdown" class="hidden absolute top-full left-0 right-0 mt-1 bg-dark-card border border-dark-border rounded-lg shadow-lg overflow-hidden z-[9999] max-h-64 overflow-y-auto">
-                        <!-- Brand suggestions will be inserted here -->
-                    </div>
+                    <div id="brand-dropdown" class="hidden absolute top-full left-0 right-0 bg-dark-card border border-dark-border rounded-lg mt-1 z-[9999] max-h-40 overflow-y-auto"></div>
                 </div>
             </div>
             <div class="flex gap-2">
@@ -716,11 +714,7 @@
             }
         });
 
-        // Brand Autocomplete
-        let brandAutocompleteTimeout = null;
-        let currentBrandSuggestions = [];
-
-        // Статический список брендов для автозаполнения (не зависит от API)
+        // Статический список брендов для автозаполнения
         const defaultBrands = [
             'Peugeot', 'Citroen', 'Renault', 'BMW', 'Mercedes', 'Audi', 'VW', 'Toyota',
             'Ford', 'Hyundai', 'Kia', 'Nissan', 'Bosch', 'Febi', 'Lemforder', 'TRW',
@@ -728,125 +722,43 @@
             'Dayco', 'NGK', 'Denso', 'Valeo', 'Hella', 'PEUGEOT CITROEN', 'Groupe PSA'
         ];
 
-        async function loadBrandSuggestions(query) {
-            if (!query || query.length < 2) {
-                hideBrandDropdown();
-                return;
+        document.getElementById('search-brand').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            if (query.length >= 2) {
+                loadBrandSuggestions(query);
+            } else {
+                document.getElementById('brand-dropdown').classList.add('hidden');
             }
+        });
 
-            // Фильтруем по статическому списку брендов (без обращения к API)
-            const filtered = defaultBrands.filter(brand =>
-                brand.toLowerCase().includes(query.toLowerCase())
+        function loadBrandSuggestions(query) {
+            const filtered = defaultBrands.filter(b =>
+                b.toLowerCase().includes(query)
             );
-
-            currentBrandSuggestions = filtered;
             showBrandDropdown(filtered);
         }
 
-        function showBrandDropdown(brands) {
+        function showBrandDropdown(suggestions) {
             const dropdown = document.getElementById('brand-dropdown');
-            if (!brands || brands.length === 0) {
-                hideBrandDropdown();
+            if (suggestions.length === 0) {
+                dropdown.classList.add('hidden');
                 return;
             }
 
-            dropdown.innerHTML = brands.map(brand => `
-                <div 
-                    class="brand-dropdown-item text-sm text-white border-b border-dark-border/50 last:border-b-0"
-                    data-brand="${brand.replace(/"/g, '&quot;')}"
-                >
-                    <span class="font-medium">${brand}</span>
-                </div>
-            `).join('');
-
-            // Add event listeners for each item (both click and touch)
-            dropdown.querySelectorAll('.brand-dropdown-item').forEach(item => {
-                const brand = item.dataset.brand;
-                
-                // Click event (desktop)
-                item.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    selectBrandFromDropdown(brand);
-                });
-
-                // Touch events (mobile)
-                item.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    item.style.backgroundColor = 'rgba(37, 37, 69, 1)';
-                }, { passive: false });
-
-                item.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    item.style.backgroundColor = '';
-                    selectBrandFromDropdown(brand);
-                }, { passive: false });
-
-                item.addEventListener('touchcancel', (e) => {
-                    item.style.backgroundColor = '';
-                });
-            });
-
+            dropdown.innerHTML = suggestions.map(b =>
+                `<div class="px-3 py-2 hover:bg-purple-600 cursor-pointer min-h-[44px] flex items-center" onclick="selectBrand('${b}')">${b}</div>`
+            ).join('');
             dropdown.classList.remove('hidden');
         }
 
-        function hideBrandDropdown() {
-            const dropdown = document.getElementById('brand-dropdown');
-            dropdown.classList.add('hidden');
-            dropdown.innerHTML = '';
-            currentBrandSuggestions = [];
-        }
-
-        function selectBrandFromDropdown(brand) {
+        function selectBrand(brand) {
             document.getElementById('search-brand').value = brand;
-            hideBrandDropdown();
+            document.getElementById('brand-dropdown').classList.add('hidden');
         }
 
-        // Brand input autocomplete
-        const brandInput = document.getElementById('search-brand');
-        brandInput.addEventListener('input', (e) => {
-            const query = e.target.value.trim();
-            
-            clearTimeout(brandAutocompleteTimeout);
-            
-            if (query.length < 2) {
-                hideBrandDropdown();
-                return;
-            }
-
-            brandAutocompleteTimeout = setTimeout(() => {
-                loadBrandSuggestions(query);
-            }, 300);
-        });
-
-        brandInput.addEventListener('blur', () => {
-            // Delay hiding to allow click on dropdown item
-            setTimeout(() => {
-                hideBrandDropdown();
-            }, 200);
-        });
-
-        brandInput.addEventListener('focus', () => {
-            const query = brandInput.value.trim();
-            if (query.length >= 2) {
-                loadBrandSuggestions(query);
-            }
-        });
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-            const brandInputContainer = brandInput.closest('.relative');
-            if (brandInputContainer && !brandInputContainer.contains(e.target)) {
-                hideBrandDropdown();
-            }
-        });
-
-        // Prevent dropdown from closing on touch inside dropdown
-        document.getElementById('brand-dropdown').addEventListener('touchstart', (e) => {
-            e.stopPropagation();
-        });
+        function hideBrandDropdown() {
+            document.getElementById('brand-dropdown').classList.add('hidden');
+        }
 
         // Init active filter styles
         document.querySelectorAll('.filter-btn.active').forEach(btn => {
