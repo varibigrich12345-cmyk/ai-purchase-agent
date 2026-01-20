@@ -85,6 +85,19 @@
         .brand-dropdown-item:active {
             background-color: rgba(37, 37, 69, 1);
         }
+
+        /* Brand dropdown container */
+        #brand-dropdown {
+            min-width: 200px;
+            background: #1a1a2e;
+            border: 1px solid #2d2d44;
+        }
+
+        @media (min-width: 768px) {
+            #brand-dropdown {
+                min-width: 250px;
+            }
+        }
     </style>
 </head>
 <body class="bg-dark-bg text-gray-100 min-h-screen">
@@ -716,11 +729,60 @@
 
         // Статический список брендов для автозаполнения
         const defaultBrands = [
-            'Peugeot', 'Citroen', 'Renault', 'BMW', 'Mercedes', 'Audi', 'VW', 'Toyota',
-            'Ford', 'Hyundai', 'Kia', 'Nissan', 'Bosch', 'Febi', 'Lemforder', 'TRW',
-            'ATE', 'Sachs', 'LuK', 'SKF', 'SNR', 'FAG', 'INA', 'Gates', 'Contitech',
-            'Dayco', 'NGK', 'Denso', 'Valeo', 'Hella', 'PEUGEOT CITROEN', 'Groupe PSA'
+            // Оригинальные бренды
+            'Peugeot', 'Citroen', 'Renault', 'BMW', 'Mercedes', 'Audi', 'VW', 'Volkswagen',
+            'Toyota', 'Ford', 'Hyundai', 'Kia', 'Nissan', 'Honda', 'Mazda', 'Mitsubishi',
+            'Suzuki', 'Subaru', 'Lexus', 'Infiniti', 'Acura', 'Fiat', 'Alfa Romeo',
+            'Opel', 'Chevrolet', 'Skoda', 'Seat', 'Volvo', 'Saab', 'Lada', 'UAZ', 'GAZ',
+            'PEUGEOT CITROEN', 'Groupe PSA', 'Stellantis',
+
+            // Производители запчастей
+            'Bosch', 'Febi', 'Lemforder', 'TRW', 'ATE', 'Sachs', 'LuK', 'SKF', 'SNR',
+            'FAG', 'INA', 'Gates', 'Contitech', 'Dayco', 'NGK', 'Denso', 'Valeo', 'Hella',
+            'Brembo', 'Ferodo', 'Textar', 'Zimmermann', 'Mahle', 'Mann', 'Filtron', 'Knecht',
+            'Continental', 'Delphi', 'Motorcraft', 'ACDelco', 'Aisin', 'NTN', 'Koyo',
+            'Monroe', 'Kayaba', 'KYB', 'Bilstein', 'Sachs', 'Meyle', 'Swag', 'Topran',
+            'JP Group', 'Optimal', 'Ruville', 'Corteco', 'Elring', 'Victor Reinz', 'Ajusa',
+            'Kolbenschmidt', 'Glyco', 'King', 'Hastings', 'Goetze', 'Nipparts', 'Blue Print',
+            'Ashika', 'Japanparts', 'Triscan', 'A.B.S.', 'NK', 'Quinton Hazell',
+            'Toyopower', 'Taksim', 'Parts Mall', 'CTR', 'GMB', 'Masuma', 'Lynx'
         ];
+
+        // Динамические бренды из истории по текущему артикулу
+        let articleBrands = [];
+
+        // При вводе артикула – загрузить бренды из истории
+        document.getElementById('partnumber').addEventListener('input', async (e) => {
+            const partnumber = e.target.value.trim();
+            articleBrands = [];
+
+            if (partnumber.length >= 3) {
+                try {
+                    const response = await fetch(`/api/article-brands?partnumber=${encodeURIComponent(partnumber)}`);
+                    const data = await response.json();
+                    if (data.brands && data.brands.length > 0) {
+                        articleBrands = data.brands;
+                        showArticleBrandsHint(data.brands);
+                    }
+                } catch (err) {
+                    console.log('Не удалось загрузить бренды для артикула');
+                }
+            }
+        });
+
+        function showArticleBrandsHint(brands) {
+            // Показать: "Найденные бренды: Peugeot, PEUGEOT CITROEN"
+            let hint = document.getElementById('article-brands-hint');
+            if (!hint) {
+                hint = document.createElement('div');
+                hint.id = 'article-brands-hint';
+                hint.className = 'text-xs text-gray-400 mt-1';
+                const partInput = document.getElementById('partnumber');
+                const parent = partInput.parentNode;
+                parent.appendChild(hint);
+            }
+            hint.textContent = `Найденные бренды: ${brands.join(', ')}`;
+        }
 
         document.getElementById('search-brand').addEventListener('input', (e) => {
             const query = e.target.value.toLowerCase().trim();
@@ -732,10 +794,24 @@
         });
 
         function loadBrandSuggestions(query) {
-            const filtered = defaultBrands.filter(b =>
-                b.toLowerCase().includes(query)
+            const q = query.toLowerCase();
+
+            // 1. Бренды из истории для этого артикула
+            const dynamic = (articleBrands || []).filter(b =>
+                b && b.toLowerCase().includes(q)
             );
-            showBrandDropdown(filtered);
+
+            const dynamicSet = new Set(dynamic.map(b => b.toLowerCase()));
+
+            // 2. Остальные бренды из статического списка
+            const fromDefault = defaultBrands.filter(b => {
+                if (!b) return false;
+                const lower = b.toLowerCase();
+                return lower.includes(q) && !dynamicSet.has(lower);
+            });
+
+            const combined = [...dynamic, ...fromDefault];
+            showBrandDropdown(combined);
         }
 
         function showBrandDropdown(suggestions) {
