@@ -71,6 +71,20 @@
         .day-toggle.collapsed::after {
             transform: rotate(-45deg);
         }
+
+        /* Brand dropdown items - minimum 44px for mobile touch */
+        .brand-dropdown-item {
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
+        }
+        .brand-dropdown-item:hover,
+        .brand-dropdown-item:active {
+            background-color: rgba(37, 37, 69, 1);
+        }
     </style>
 </head>
 <body class="bg-dark-bg text-gray-100 min-h-screen">
@@ -92,13 +106,19 @@
                     autocomplete="off"
                     class="flex-1 bg-dark-bg border border-dark-border rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                 >
-                <input
-                    id="search-brand"
-                    type="text"
-                    placeholder="Бренд"
-                    autocomplete="off"
-                    class="w-28 bg-dark-bg border border-dark-border rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-                >
+                <div class="relative w-28">
+                    <input
+                        id="search-brand"
+                        type="text"
+                        placeholder="Бренд"
+                        autocomplete="off"
+                        class="w-full bg-dark-bg border border-dark-border rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                    >
+                    <!-- Brand Autocomplete Dropdown -->
+                    <div id="brand-dropdown" class="hidden absolute top-full left-0 right-0 mt-1 bg-dark-card border border-dark-border rounded-lg shadow-lg overflow-hidden z-[9999] max-h-64 overflow-y-auto">
+                        <!-- Brand suggestions will be inserted here -->
+                    </div>
+                </div>
             </div>
             <div class="flex gap-2">
                 <button
@@ -690,7 +710,148 @@
             if (e.key === 'Enter') createTask();
         });
         document.getElementById('search-brand').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') createTask();
+            if (e.key === 'Enter') {
+                hideBrandDropdown();
+                createTask();
+            }
+        });
+
+        // Brand Autocomplete
+        let brandAutocompleteTimeout = null;
+        let currentBrandSuggestions = [];
+
+        async function loadBrandSuggestions(query) {
+            if (!query || query.length < 2) {
+                hideBrandDropdown();
+                return;
+            }
+
+            try {
+                const partnumber = document.getElementById('partnumber').value.trim();
+                if (!partnumber) {
+                    hideBrandDropdown();
+                    return;
+                }
+
+                const res = await fetch(`/api/brands?partnumber=${encodeURIComponent(partnumber)}`);
+                const brands = await res.json();
+                
+                // Filter brands by query (case-insensitive)
+                const filtered = brands.filter(brand => 
+                    brand.toLowerCase().includes(query.toLowerCase())
+                );
+
+                currentBrandSuggestions = filtered;
+                showBrandDropdown(filtered);
+            } catch (e) {
+                console.error('loadBrandSuggestions error:', e);
+                hideBrandDropdown();
+            }
+        }
+
+        function showBrandDropdown(brands) {
+            const dropdown = document.getElementById('brand-dropdown');
+            if (!brands || brands.length === 0) {
+                hideBrandDropdown();
+                return;
+            }
+
+            dropdown.innerHTML = brands.map(brand => `
+                <div 
+                    class="brand-dropdown-item text-sm text-white border-b border-dark-border/50 last:border-b-0"
+                    data-brand="${brand.replace(/"/g, '&quot;')}"
+                >
+                    <span class="font-medium">${brand}</span>
+                </div>
+            `).join('');
+
+            // Add event listeners for each item (both click and touch)
+            dropdown.querySelectorAll('.brand-dropdown-item').forEach(item => {
+                const brand = item.dataset.brand;
+                
+                // Click event (desktop)
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    selectBrandFromDropdown(brand);
+                });
+
+                // Touch events (mobile)
+                item.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    item.style.backgroundColor = 'rgba(37, 37, 69, 1)';
+                }, { passive: false });
+
+                item.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    item.style.backgroundColor = '';
+                    selectBrandFromDropdown(brand);
+                }, { passive: false });
+
+                item.addEventListener('touchcancel', (e) => {
+                    item.style.backgroundColor = '';
+                });
+            });
+
+            dropdown.classList.remove('hidden');
+        }
+
+        function hideBrandDropdown() {
+            const dropdown = document.getElementById('brand-dropdown');
+            dropdown.classList.add('hidden');
+            dropdown.innerHTML = '';
+            currentBrandSuggestions = [];
+        }
+
+        function selectBrandFromDropdown(brand) {
+            document.getElementById('search-brand').value = brand;
+            hideBrandDropdown();
+        }
+
+        // Brand input autocomplete
+        const brandInput = document.getElementById('search-brand');
+        brandInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            
+            clearTimeout(brandAutocompleteTimeout);
+            
+            if (query.length < 2) {
+                hideBrandDropdown();
+                return;
+            }
+
+            brandAutocompleteTimeout = setTimeout(() => {
+                loadBrandSuggestions(query);
+            }, 300);
+        });
+
+        brandInput.addEventListener('blur', () => {
+            // Delay hiding to allow click on dropdown item
+            setTimeout(() => {
+                hideBrandDropdown();
+            }, 200);
+        });
+
+        brandInput.addEventListener('focus', () => {
+            const query = brandInput.value.trim();
+            if (query.length >= 2) {
+                loadBrandSuggestions(query);
+            }
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const brandInputContainer = brandInput.closest('.relative');
+            if (brandInputContainer && !brandInputContainer.contains(e.target)) {
+                hideBrandDropdown();
+            }
+        });
+
+        // Prevent dropdown from closing on touch inside dropdown
+        document.getElementById('brand-dropdown').addEventListener('touchstart', (e) => {
+            e.stopPropagation();
         });
 
         // Init active filter styles
