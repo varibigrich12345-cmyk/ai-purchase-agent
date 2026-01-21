@@ -13,6 +13,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="AI Purchase">
     <link rel="apple-touch-icon" href="/icon-192.png">
+    <meta name="app-version" content="2.1">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -173,6 +174,26 @@
             cursor: not-allowed;
         }
 
+        /* Voice button styles */
+        .voice-btn {
+            background: transparent;
+            border: none;
+            font-size: 1.3rem;
+            cursor: pointer;
+            padding: 8px 12px;
+            transition: opacity 0.2s;
+        }
+        .voice-btn:hover {
+            opacity: 0.8;
+        }
+        .voice-btn.recording {
+            animation: pulse 0.5s infinite alternate;
+        }
+        @keyframes pulse {
+            from { opacity: 1; }
+            to { opacity: 0.5; }
+        }
+
         /* Mobile-specific fixes */
         @media (max-width: 768px) {
             #brand-dropdown {
@@ -288,6 +309,7 @@
             </div>
             <div class="ai-chat-input">
                 <input type="text" id="ai-chat-input" placeholder="Задайте вопрос про последний артикул..." onkeypress="if(event.key === 'Enter') sendAIChatMessage()">
+                <button id="ai-voice-btn" class="voice-btn">🎤</button>
                 <button id="ai-chat-send" onclick="sendAIChatMessage()">➤</button>
             </div>
         </div>
@@ -1212,11 +1234,95 @@
             }
         })();
 
+        // === Голосовой ввод для AI-чата ===
+        (function initVoiceInput() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            
+            if (SpeechRecognition) {
+                const recognition = new SpeechRecognition();
+                recognition.lang = 'ru-RU';
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                
+                const voiceBtn = document.getElementById('ai-voice-btn');
+                
+                if (voiceBtn) {
+                    voiceBtn.onclick = () => {
+                        try {
+                            recognition.start();
+                            voiceBtn.textContent = '🔴';
+                            voiceBtn.classList.add('recording');
+                        } catch (e) {
+                            // Если уже запущено, игнорируем ошибку
+                            console.log('Recognition already started');
+                        }
+                    };
+                    
+                    recognition.onresult = (event) => {
+                        const text = event.results[0][0].transcript;
+                        const input = document.getElementById('ai-chat-input');
+                        if (input) {
+                            input.value = text;
+                            input.focus();
+                        }
+                    };
+                    
+                    recognition.onend = () => {
+                        voiceBtn.textContent = '🎤';
+                        voiceBtn.classList.remove('recording');
+                    };
+                    
+                    recognition.onerror = (event) => {
+                        voiceBtn.textContent = '🎤';
+                        voiceBtn.classList.remove('recording');
+                        console.error('Speech recognition error:', event.error);
+                    };
+                }
+            } else {
+                // Скрыть кнопку если не поддерживается
+                const voiceBtn = document.getElementById('ai-voice-btn');
+                if (voiceBtn) {
+                    voiceBtn.style.display = 'none';
+                }
+            }
+        })();
+
         // Load
         loadTasks();
         setInterval(loadTasks, 3000);
 
-        // PWA
+        // === PWA Versioning ===
+        const APP_VERSION = '2.1';
+        
+        // Проверка версии и очистка кэша при обновлении
+        (async function checkAppVersion() {
+            const storedVersion = localStorage.getItem('app_version');
+            
+            if (storedVersion !== APP_VERSION) {
+                // Новая версия - очищаем все кэши
+                if ('caches' in window) {
+                    try {
+                        const cacheNames = await caches.keys();
+                        await Promise.all(cacheNames.map(name => caches.delete(name)));
+                        console.log('✅ Кэши очищены для версии', APP_VERSION);
+                    } catch (e) {
+                        console.error('Ошибка при очистке кэшей:', e);
+                    }
+                }
+                
+                // Сохраняем новую версию
+                localStorage.setItem('app_version', APP_VERSION);
+                
+                // Перезагружаем страницу для применения обновлений
+                if (storedVersion !== null) {
+                    // Только если это не первая загрузка
+                    console.log('🔄 Обновление до версии', APP_VERSION);
+                    location.reload();
+                }
+            }
+        })();
+
+        // PWA Service Worker
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/service-worker.js').catch(() => {});
         }
