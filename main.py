@@ -13,7 +13,7 @@ from config import DB_PATH
 
 # Perplexity API
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
-PERPLEXITY_MODEL = "llama-3.1-sonar-large-128k-online"
+PERPLEXITY_MODEL = "sonar-pro"
 from backend.api.tasks_api import router as tasks_router
 from backend.api.brands_api import router as brands_router
 
