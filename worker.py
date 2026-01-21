@@ -151,6 +151,36 @@ async def process_tasks():
                     autotrade_min = None
                     brand = None
 
+                    def save_price_history(cur, partnumber_value, brand_value, source, price_value):
+                        """
+                        Сохраняем цену в price_history, если за сегодня по этому источнику
+                        ещё не было записи с такой же ценой.
+                        """
+                        if not price_value:
+                            return
+                        cur.execute(
+                            """
+                            SELECT 1 FROM price_history
+                            WHERE partnumber = ?
+                              AND (? IS NULL OR brand = ?)
+                              AND source = ?
+                              AND price = ?
+                              AND date(recorded_at) = date('now')
+                            LIMIT 1
+                            """,
+                            (partnumber_value, brand_value, brand_value, source, price_value),
+                        )
+                        if cur.fetchone():
+                            return
+
+                        cur.execute(
+                            """
+                            INSERT INTO price_history (partnumber, brand, source, price)
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            (partnumber_value, brand_value, source, price_value),
+                        )
+
                     if zzap_result.get('status') in ['DONE', 'success'] and zzap_result.get('prices'):
                         zzap_min = zzap_result['prices'].get('min')
                         if zzap_min:
@@ -210,6 +240,16 @@ async def process_tasks():
                             logger.info(f"  🏷️ Бренд (AutoTrade): {brand}")
                     else:
                         logger.warning(f"  ⚠️ AutoTrade: {autotrade_result.get('status', 'error')}")
+
+                    # После того как определён бренд (если он нашёлся), сохраняем историю цен
+                    try:
+                        save_price_history(cursor, partnumber, brand, "zzap", zzap_min)
+                        save_price_history(cursor, partnumber, brand, "stparts", stparts_min)
+                        save_price_history(cursor, partnumber, brand, "trast", trast_min)
+                        save_price_history(cursor, partnumber, brand, "autovid", autovid_min)
+                        save_price_history(cursor, partnumber, brand, "autotrade", autotrade_min)
+                    except Exception as e:
+                        logger.error(f"⚠️ Ошибка сохранения истории цен: {e}", exc_info=True)
 
                     if all_prices:
                         min_price = min(all_prices)
