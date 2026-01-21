@@ -264,13 +264,8 @@
             <button class="filter-btn shrink-0 px-3 py-1.5 text-xs rounded-full bg-dark-border transition" data-date="week">Неделя</button>
         </div>
 
-        <!-- Tasks Container -->
-        <div id="tasks-container" class="space-y-2">
-            <!-- Day groups will be inserted here -->
-        </div>
-
-        <!-- AI Chat Section (всегда виден, после первой группы) -->
-        <div id="ai-chat-section" class="ai-chat-section">
+        <!-- AI Chat Section (всегда виден, фиксированно между фильтрами и артикулами) -->
+        <div id="ai-chat-section" class="ai-chat-section mb-3">
             <div class="ai-chat-header">💬 AI Ассистент</div>
             <div id="ai-chat-messages" class="ai-chat-messages"></div>
             <div id="ai-chat-loading" class="py-3 text-center text-xs text-gray-400 hidden">
@@ -280,6 +275,11 @@
                 <input type="text" id="ai-chat-input" placeholder="Задайте вопрос про последний артикул..." onkeypress="if(event.key === 'Enter') sendAIChatMessage()">
                 <button id="ai-chat-send" onclick="sendAIChatMessage()">➤</button>
             </div>
+        </div>
+
+        <!-- Tasks Container -->
+        <div id="tasks-container" class="space-y-2">
+            <!-- Day groups will be inserted here -->
         </div>
 
         <!-- Loading State -->
@@ -489,23 +489,7 @@
             document.getElementById('loading-state').classList.add('hidden');
 
             // Единый дизайн: карточки с группировкой по дням
-            let html = '';
-            groups.forEach((g, index) => {
-                html += renderDayGroup(g);
-                // После первой группы вставляем AI-чат
-                if (index === 0) {
-                    html += '<div id="ai-chat-section-placeholder"></div>';
-                }
-            });
-            container.innerHTML = html;
-            
-            // Перемещаем AI-чат после первой группы
-            const placeholder = document.getElementById('ai-chat-section-placeholder');
-            const chatSection = document.getElementById('ai-chat-section');
-            if (placeholder && chatSection) {
-                placeholder.replaceWith(chatSection);
-            }
-            
+            container.innerHTML = groups.map(g => renderDayGroup(g)).join('');
             updateStats();
         }
 
@@ -713,14 +697,12 @@
                             autovid: latestTask.autovid_min_price,
                             autotrade: latestTask.autotrade_min_price
                         };
-                        // Небольшая задержка, чтобы интерфейс успел отрендериться
-                        setTimeout(() => {
-                            initAIChat(
-                                latestTask.partnumber,
-                                latestTask.brand || latestTask.search_brand || '',
-                                prices
-                            );
-                        }, 300);
+                        // Инициализируем сразу, без задержки
+                        initAIChat(
+                            latestTask.partnumber,
+                            latestTask.brand || latestTask.search_brand || '',
+                            prices
+                        );
                     }
                 }
             } catch (e) {
@@ -905,9 +887,11 @@
                 renderChat();
 
             } catch (e) {
+                // Исправление: правильная обработка ошибок, избегаем [object Object]
+                const errorText = e?.message || (typeof e === 'string' ? e : String(e)) || 'Ошибка при запросе к AI';
                 aiChatMessages.push({
                     role: 'ai',
-                    text: `Ошибка: ${e.message || 'Ошибка при запросе к AI'}`
+                    text: `Ошибка: ${errorText}`
                 });
                 renderChat();
             } finally {
@@ -949,25 +933,27 @@
 
                 if (!response.ok) {
                     const errData = await response.json();
-                    throw new Error(errData.detail || 'Ошибка API');
+                    throw new Error(errData?.detail || errData?.message || 'Ошибка API');
                 }
 
                 const data = await response.json();
 
                 // Исправление: убеждаемся что data.answer - строка, а не объект
-                const answerText = typeof data.answer === 'string' ? data.answer : JSON.stringify(data.answer);
+                const answerText = typeof data?.answer === 'string' ? data.answer : (data?.answer ? JSON.stringify(data.answer) : 'Нет ответа');
 
                 aiChatMessages.push({
                     role: 'ai',
                     text: answerText,
-                    sources: data.sources
+                    sources: data?.sources
                 });
                 renderChat();
 
             } catch (e) {
+                // Исправление: правильная обработка ошибок, избегаем [object Object]
+                const errorText = e?.message || (typeof e === 'string' ? e : String(e)) || 'Ошибка при запросе к AI';
                 aiChatMessages.push({
                     role: 'ai',
-                    text: `Ошибка: ${e.message || 'Ошибка при запросе к AI'}`
+                    text: `Ошибка: ${errorText}`
                 });
                 renderChat();
             } finally {
