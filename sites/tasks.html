@@ -320,7 +320,8 @@
                 { site: 'zzap', price: task.zzap_min_price },
                 { site: 'stparts', price: task.stparts_min_price },
                 { site: 'trast', price: task.trast_min_price },
-                { site: 'autovid', price: task.autovid_min_price }
+                { site: 'autovid', price: task.autovid_min_price },
+                { site: 'autotrade', price: task.autotrade_min_price }
             ].filter(p => p.price);
 
             if (prices.length === 0) return { site: null, price: null };
@@ -332,7 +333,8 @@
             zzap: (p) => `https://www.zzap.ru/public/search.aspx?rawdata=${encodeURIComponent(p)}`,
             stparts: (p) => `https://stparts.ru/search?pcode=${encodeURIComponent(p)}`,
             trast: (p) => `https://trast-zapchast.ru/?s=${encodeURIComponent(p)}`,
-            autovid: (p) => `https://auto-vid.com/?s=${encodeURIComponent(p)}&post_type=product`
+            autovid: (p) => `https://auto-vid.com/?s=${encodeURIComponent(p)}&post_type=product`,
+            autotrade: (p) => `https://sklad.autotrade.su/search/?type=article&q=${encodeURIComponent(p)}&mode=by_full_article`
         };
 
         // Filtering
@@ -428,6 +430,7 @@
                                 <th class="px-4 py-3 font-medium text-right text-green-400">STparts</th>
                                 <th class="px-4 py-3 font-medium text-right text-orange-400">Trast</th>
                                 <th class="px-4 py-3 font-medium text-right text-purple-400">AutoVID</th>
+                                <th class="px-4 py-3 font-medium text-right text-amber-400">AutoTrade</th>
                                 <th class="px-4 py-3 font-medium text-right">Лучшая</th>
                             </tr>
                         </thead>
@@ -462,11 +465,12 @@
                     <td class="px-4 py-3 text-right">${priceCell(t.stparts_min_price, 'stparts', 'text-green-300')}</td>
                     <td class="px-4 py-3 text-right">${priceCell(t.trast_min_price, 'trast', 'text-orange-300')}</td>
                     <td class="px-4 py-3 text-right">${priceCell(t.autovid_min_price, 'autovid', 'text-purple-300')}</td>
+                    <td class="px-4 py-3 text-right">${priceCell(t.autotrade_min_price, 'autotrade', 'text-amber-300')}</td>
                     <td class="px-4 py-3 text-right font-bold ${best.price ? 'text-green-400' : 'text-gray-500'}">${formatPrice(best.price)}</td>
                 </tr>
                 ${isError && t.error_message ? `
                     <tr class="bg-red-500/5">
-                        <td colspan="8" class="px-4 py-2 text-xs text-red-400">${t.error_message}</td>
+                        <td colspan="9" class="px-4 py-2 text-xs text-red-400">${t.error_message}</td>
                     </tr>
                 ` : ''}
             `;
@@ -540,7 +544,8 @@
                 { key: 'zzap', name: 'ZZAP', color: 'blue', price: t.zzap_min_price },
                 { key: 'stparts', name: 'STparts', color: 'green', price: t.stparts_min_price },
                 { key: 'trast', name: 'Trast', color: 'orange', price: t.trast_min_price },
-                { key: 'autovid', name: 'AutoVID', color: 'purple', price: t.autovid_min_price }
+                { key: 'autovid', name: 'AutoVID', color: 'purple', price: t.autovid_min_price },
+                { key: 'autotrade', name: 'AutoTrade', color: 'amber', price: t.autotrade_min_price }
             ];
 
             // Compact list format: Site name, price, [Открыть] button

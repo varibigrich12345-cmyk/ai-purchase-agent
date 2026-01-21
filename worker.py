@@ -24,6 +24,7 @@ from zzap_cdp_client import ZZapCDPClient
 from stparts_cdp_client import STPartsCDPClient
 from trast_cdp_client import TrastCDPClient  # Stealth mode с обходом JS-challenge
 from autovid_cdp_client import AutoVidCDPClient  # Auto-VID с WooCommerce
+from autotrade_client import AutoTradeClient  # sklad.autotrade.su
 from config import DB_PATH
 
 logging.basicConfig(
@@ -54,11 +55,12 @@ async def process_tasks():
     # Подключаемся к Chrome через CDP
     logger.info("🔧 Подключение к Chrome CDP...")
 
-    async with ZZapCDPClient() as zzap_client, STPartsCDPClient() as stparts_client, TrastCDPClient() as trast_client, AutoVidCDPClient() as autovid_client:
+    async with ZZapCDPClient() as zzap_client, STPartsCDPClient() as stparts_client, TrastCDPClient() as trast_client, AutoVidCDPClient() as autovid_client, AutoTradeClient() as autotrade_client:
         logger.info("  ✅ ZZAP клиент подключён")
         logger.info("  ✅ STparts клиент подключён")
         logger.info("  ✅ Trast клиент подключён (stealth режим)")
         logger.info("  ✅ AutoVID клиент подключён")
+        logger.info("  ✅ AutoTrade клиент подключён")
         logger.info("✅ Все клиенты готовы к работе!")
 
         while True:
@@ -91,7 +93,7 @@ async def process_tasks():
                     # Таймаут для каждого сайта (120 секунд)
                     SITE_TIMEOUT = 120
 
-                    logger.info("🔵 [1/4] Поиск на ZZAP.ru...")
+                    logger.info("🔵 [1/5] Поиск на ZZAP.ru...")
                     try:
                         zzap_result = await asyncio.wait_for(
                             zzap_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
@@ -101,7 +103,7 @@ async def process_tasks():
                         logger.error(f"  ⏱️ ZZAP: таймаут {SITE_TIMEOUT}с")
                         zzap_result = {'status': 'timeout', 'prices': None}
 
-                    logger.info("🟢 [2/4] Поиск на STparts.ru...")
+                    logger.info("🟢 [2/5] Поиск на STparts.ru...")
                     try:
                         stparts_result = await asyncio.wait_for(
                             stparts_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
@@ -111,7 +113,7 @@ async def process_tasks():
                         logger.error(f"  ⏱️ STparts: таймаут {SITE_TIMEOUT}с")
                         stparts_result = {'status': 'timeout', 'prices': None}
 
-                    logger.info("🟠 [3/4] Поиск на Trast.ru (stealth)...")
+                    logger.info("🟠 [3/5] Поиск на Trast.ru (stealth)...")
                     try:
                         trast_result = await asyncio.wait_for(
                             trast_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
@@ -121,7 +123,7 @@ async def process_tasks():
                         logger.error(f"  ⏱️ Trast: таймаут {SITE_TIMEOUT}с")
                         trast_result = {'status': 'timeout', 'prices': None}
 
-                    logger.info("🟣 [4/4] Поиск на Auto-VID.com...")
+                    logger.info("🟣 [4/5] Поиск на Auto-VID.com...")
                     try:
                         autovid_result = await asyncio.wait_for(
                             autovid_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
@@ -131,11 +133,22 @@ async def process_tasks():
                         logger.error(f"  ⏱️ AutoVID: таймаут {SITE_TIMEOUT}с")
                         autovid_result = {'status': 'timeout', 'prices': None}
 
+                    logger.info("🟤 [5/5] Поиск на AutoTrade.su...")
+                    try:
+                        autotrade_result = await asyncio.wait_for(
+                            autotrade_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
+                            timeout=SITE_TIMEOUT
+                        )
+                    except asyncio.TimeoutError:
+                        logger.error(f"  ⏱️ AutoTrade: таймаут {SITE_TIMEOUT}с")
+                        autotrade_result = {'status': 'timeout', 'prices': None}
+
                     all_prices = []
                     zzap_min = None
                     stparts_min = None
                     trast_min = None
                     autovid_min = None
+                    autotrade_min = None
                     brand = None
 
                     if zzap_result.get('status') in ['DONE', 'success'] and zzap_result.get('prices'):
@@ -186,6 +199,18 @@ async def process_tasks():
                     else:
                         logger.warning(f"  ⚠️ AutoVID: {autovid_result.get('status', 'error')}")
 
+                    if autotrade_result.get('status') in ['DONE', 'success'] and autotrade_result.get('prices'):
+                        autotrade_min = autotrade_result['prices'].get('min')
+                        if autotrade_min:
+                            all_prices.append(autotrade_min)
+                            logger.info(f"  ✅ AutoTrade: {autotrade_min}₽")
+                        # Получаем бренд из AutoTrade если не нашли ранее
+                        if not brand and autotrade_result.get('brand'):
+                            brand = autotrade_result['brand']
+                            logger.info(f"  🏷️ Бренд (AutoTrade): {brand}")
+                    else:
+                        logger.warning(f"  ⚠️ AutoTrade: {autotrade_result.get('status', 'error')}")
+
                     if all_prices:
                         min_price = min(all_prices)
                         avg_price = round(sum(all_prices) / len(all_prices), 2)
@@ -199,6 +224,7 @@ async def process_tasks():
                                 stparts_min_price = ?,
                                 trast_min_price = ?,
                                 autovid_min_price = ?,
+                                autotrade_min_price = ?,
                                 brand = ?,
                                 result_url = ?,
                                 completed_at = CURRENT_TIMESTAMP
@@ -210,8 +236,9 @@ async def process_tasks():
                                 stparts_min,
                                 trast_min,
                                 autovid_min,
+                                autotrade_min,
                                 brand,
-                                zzap_result.get('url') or stparts_result.get('url') or trast_result.get('url') or autovid_result.get('url'),
+                                zzap_result.get('url') or stparts_result.get('url') or trast_result.get('url') or autovid_result.get('url') or autotrade_result.get('url'),
                                 task_id
                             )
                         )
@@ -229,9 +256,11 @@ async def process_tasks():
                             logger.info(f"   🟠 Trast: {trast_min}₽")
                         if autovid_min:
                             logger.info(f"   🟣 AutoVID: {autovid_min}₽")
+                        if autotrade_min:
+                            logger.info(f"   🟤 AutoTrade: {autotrade_min}₽")
 
                     else:
-                        error_msg = f"ZZAP: {zzap_result.get('status')}, STparts: {stparts_result.get('status')}, Trast: {trast_result.get('status')}, AutoVID: {autovid_result.get('status')}"
+                        error_msg = f"ZZAP: {zzap_result.get('status')}, STparts: {stparts_result.get('status')}, Trast: {trast_result.get('status')}, AutoVID: {autovid_result.get('status')}, AutoTrade: {autotrade_result.get('status')}"
                         cursor.execute(
                             """UPDATE tasks SET
                                 status = 'ERROR',

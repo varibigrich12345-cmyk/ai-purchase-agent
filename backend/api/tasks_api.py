@@ -36,6 +36,7 @@ class TaskResponse(BaseModel):
     stparts_min_price: Optional[float] = None
     trast_min_price: Optional[float] = None
     autovid_min_price: Optional[float] = None
+    autotrade_min_price: Optional[float] = None
     brand: Optional[str] = None
     result_url: Optional[str] = None
     error_message: Optional[str] = None

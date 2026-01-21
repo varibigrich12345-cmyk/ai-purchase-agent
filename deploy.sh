@@ -152,6 +152,9 @@ cursor.execute("""
         avg_price REAL,
         zzap_min_price REAL,
         stparts_min_price REAL,
+        trast_min_price REAL,
+        autovid_min_price REAL,
+        autotrade_min_price REAL,
         brand TEXT,
         result_url TEXT,
         error_message TEXT,
@@ -160,6 +163,13 @@ cursor.execute("""
         completed_at TIMESTAMP
     )
 """)
+
+# Add new columns if they don't exist (migration for existing databases)
+for column in ['trast_min_price', 'autovid_min_price', 'autotrade_min_price']:
+    try:
+        cursor.execute(f"ALTER TABLE tasks ADD COLUMN {column} REAL")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
 
 conn.commit()
 conn.close()

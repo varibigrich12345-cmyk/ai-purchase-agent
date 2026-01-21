@@ -17,14 +17,21 @@ def init_db():
     """Инициализировать базу данных"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             partnumber TEXT NOT NULL,
+            search_brand TEXT,
             status TEXT NOT NULL DEFAULT 'PENDING',
             min_price REAL,
             avg_price REAL,
+            zzap_min_price REAL,
+            stparts_min_price REAL,
+            trast_min_price REAL,
+            autovid_min_price REAL,
+            autotrade_min_price REAL,
+            brand TEXT,
             result_url TEXT,
             error_message TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -32,7 +39,24 @@ def init_db():
             completed_at TIMESTAMP
         )
     """)
-    
+
+    # Миграция: добавляем новые колонки если их нет
+    new_columns = [
+        'search_brand TEXT',
+        'zzap_min_price REAL',
+        'stparts_min_price REAL',
+        'trast_min_price REAL',
+        'autovid_min_price REAL',
+        'autotrade_min_price REAL',
+        'brand TEXT',
+    ]
+    for col_def in new_columns:
+        col_name = col_def.split()[0]
+        try:
+            cursor.execute(f"ALTER TABLE tasks ADD COLUMN {col_def}")
+        except:
+            pass  # Колонка уже существует
+
     conn.commit()
     conn.close()
 
