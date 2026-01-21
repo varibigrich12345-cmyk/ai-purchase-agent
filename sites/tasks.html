@@ -262,8 +262,9 @@
     <!-- AI Modal -->
     <div id="ai-modal" class="fixed inset-0 z-50 hidden">
         <div class="absolute inset-0 bg-black/70" onclick="closeAIModal()"></div>
-        <div class="absolute inset-x-4 top-1/2 -translate-y-1/2 max-w-lg mx-auto bg-dark-card rounded-2xl border border-dark-border overflow-hidden">
-            <div class="px-4 py-3 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 border-b border-dark-border flex items-center justify-between">
+        <div class="absolute inset-x-4 top-1/2 -translate-y-1/2 max-w-lg mx-auto bg-dark-card rounded-2xl border border-dark-border overflow-hidden flex flex-col" style="max-height: 85vh;">
+            <!-- Header -->
+            <div class="px-4 py-3 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 border-b border-dark-border flex items-center justify-between shrink-0">
                 <div>
                     <h3 class="text-lg font-semibold flex items-center gap-2">
                         <span>✨</span> AI Ассистент
@@ -272,19 +273,41 @@
                 </div>
                 <button onclick="closeAIModal()" class="text-gray-400 hover:text-white text-xl">&times;</button>
             </div>
-            <div id="ai-modal-loading" class="py-12 text-center">
+
+            <!-- Chat Messages Area -->
+            <div id="ai-modal-chat" class="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 hidden">
+                <!-- Messages will be inserted here -->
+            </div>
+
+            <!-- Loading State (initial) -->
+            <div id="ai-modal-loading" class="py-12 text-center shrink-0">
                 <div class="w-8 h-8 mx-auto mb-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
                 <p class="text-sm text-gray-400">Спрашиваю Perplexity AI...</p>
             </div>
-            <div id="ai-modal-content" class="hidden p-4">
-                <div id="ai-modal-answer" class="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap"></div>
-                <div id="ai-modal-sources" class="hidden mt-4 pt-3 border-t border-dark-border">
-                    <p class="text-xs text-gray-500 mb-2">Источники:</p>
-                    <div id="ai-modal-sources-list" class="text-xs text-blue-400 space-y-1"></div>
-                </div>
-            </div>
-            <div id="ai-modal-error" class="hidden p-4 text-center">
+
+            <!-- Error State -->
+            <div id="ai-modal-error" class="hidden p-4 text-center shrink-0">
                 <p class="text-red-400 text-sm"></p>
+            </div>
+
+            <!-- Input Area -->
+            <div id="ai-modal-input-area" class="hidden px-4 py-3 border-t border-dark-border shrink-0">
+                <div class="flex gap-2">
+                    <input
+                        id="ai-modal-input"
+                        type="text"
+                        placeholder="Задайте вопрос..."
+                        class="flex-1 bg-dark-bg border border-dark-border rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                        onkeypress="if(event.key === 'Enter') sendAIMessage()"
+                    >
+                    <button
+                        onclick="sendAIMessage()"
+                        id="ai-modal-send-btn"
+                        class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-lg text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Отправить
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -727,25 +750,154 @@
             pendingPartnumber = null;
         }
 
-        // === AI Modal ===
+        // === AI Modal Chat ===
+        let aiChatContext = null; // { partnumber, brand, prices }
+        let aiChatMessages = []; // [{ role: 'user'|'ai', text: string, sources?: [] }]
+
         function closeAIModal() {
             document.getElementById('ai-modal').classList.add('hidden');
+            aiChatContext = null;
+            aiChatMessages = [];
+        }
+
+        function renderChatMessage(message) {
+            const isAI = message.role === 'ai';
+            return `
+                <div class="flex ${isAI ? 'justify-start' : 'justify-end'}">
+                    <div class="max-w-[80%] ${isAI ? 'bg-purple-600/20 border border-purple-500/30' : 'bg-dark-border'} rounded-lg px-3 py-2">
+                        <div class="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">${message.text}</div>
+                        ${message.sources && message.sources.length > 0 ? `
+                            <div class="mt-2 pt-2 border-t border-dark-border/50">
+                                <p class="text-xs text-gray-500 mb-1">Источники:</p>
+                                <div class="text-xs text-blue-400 space-y-1">
+                                    ${message.sources.map(s => `<a href="${s}" target="_blank" class="block hover:underline truncate">${s}</a>`).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderChat() {
+            const chatContainer = document.getElementById('ai-modal-chat');
+            if (aiChatMessages.length === 0) {
+                chatContainer.innerHTML = '';
+                return;
+            }
+            chatContainer.innerHTML = aiChatMessages.map(msg => renderChatMessage(msg)).join('');
+            // Scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function addTypingIndicator() {
+            const chatContainer = document.getElementById('ai-modal-chat');
+            const typingId = 'typing-indicator';
+            const typingHTML = `
+                <div id="${typingId}" class="flex justify-start">
+                    <div class="bg-purple-600/20 border border-purple-500/30 rounded-lg px-3 py-2">
+                        <div class="flex gap-1">
+                            <div class="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                            <div class="w-2 h-2 bg-purple-400 rounded-full animate-pulse" style="animation-delay: 0.2s"></div>
+                            <div class="w-2 h-2 bg-purple-400 rounded-full animate-pulse" style="animation-delay: 0.4s"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            chatContainer.insertAdjacentHTML('beforeend', typingHTML);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function removeTypingIndicator() {
+            const typingEl = document.getElementById('typing-indicator');
+            if (typingEl) typingEl.remove();
+        }
+
+        async function sendAIMessage(question = null) {
+            if (!aiChatContext) return;
+
+            const input = document.getElementById('ai-modal-input');
+            const sendBtn = document.getElementById('ai-modal-send-btn');
+            
+            // Get question from input if not provided
+            if (!question) {
+                question = input.value.trim();
+                if (!question) return;
+                input.value = '';
+            }
+
+            // Disable input while sending
+            input.disabled = true;
+            sendBtn.disabled = true;
+
+            // Add user message
+            aiChatMessages.push({ role: 'user', text: question });
+            renderChat();
+
+            // Show typing indicator
+            addTypingIndicator();
+
+            try {
+                const response = await fetch('/api/ask-ai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        partnumber: aiChatContext.partnumber,
+                        brand: aiChatContext.brand,
+                        prices: aiChatContext.prices,
+                        question: question
+                    })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Ошибка API');
+                }
+
+                const data = await response.json();
+
+                // Remove typing indicator
+                removeTypingIndicator();
+
+                // Add AI response
+                aiChatMessages.push({
+                    role: 'ai',
+                    text: data.answer,
+                    sources: data.sources
+                });
+                renderChat();
+
+            } catch (e) {
+                removeTypingIndicator();
+                aiChatMessages.push({
+                    role: 'ai',
+                    text: `Ошибка: ${e.message || 'Ошибка при запросе к AI'}`
+                });
+                renderChat();
+            } finally {
+                input.disabled = false;
+                sendBtn.disabled = false;
+                input.focus();
+            }
         }
 
         async function askAI(taskId, partnumber, brand, prices) {
             const modal = document.getElementById('ai-modal');
             const loading = document.getElementById('ai-modal-loading');
-            const content = document.getElementById('ai-modal-content');
+            const chat = document.getElementById('ai-modal-chat');
+            const inputArea = document.getElementById('ai-modal-input-area');
             const error = document.getElementById('ai-modal-error');
-            const answer = document.getElementById('ai-modal-answer');
-            const sourcesDiv = document.getElementById('ai-modal-sources');
-            const sourcesList = document.getElementById('ai-modal-sources-list');
 
-            // Reset modal state
+            // Reset state
             loading.classList.remove('hidden');
-            content.classList.add('hidden');
+            chat.classList.add('hidden');
+            inputArea.classList.add('hidden');
             error.classList.add('hidden');
             document.getElementById('ai-modal-partnumber').textContent = `${partnumber}${brand ? ' (' + brand + ')' : ''}`;
+
+            // Store context
+            aiChatContext = { partnumber, brand, prices };
+            aiChatMessages = [];
 
             modal.classList.remove('hidden');
 
@@ -763,19 +915,21 @@
 
                 const data = await response.json();
 
+                // Hide loading, show chat
                 loading.classList.add('hidden');
-                content.classList.remove('hidden');
-                answer.textContent = data.answer;
+                chat.classList.remove('hidden');
+                inputArea.classList.remove('hidden');
 
-                // Show sources if available
-                if (data.sources && data.sources.length > 0) {
-                    sourcesDiv.classList.remove('hidden');
-                    sourcesList.innerHTML = data.sources.map(s =>
-                        `<a href="${s}" target="_blank" class="block hover:underline truncate">${s}</a>`
-                    ).join('');
-                } else {
-                    sourcesDiv.classList.add('hidden');
-                }
+                // Add first AI message
+                aiChatMessages.push({
+                    role: 'ai',
+                    text: data.answer,
+                    sources: data.sources
+                });
+                renderChat();
+
+                // Focus input
+                document.getElementById('ai-modal-input').focus();
 
             } catch (e) {
                 loading.classList.add('hidden');

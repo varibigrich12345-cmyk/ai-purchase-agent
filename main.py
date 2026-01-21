@@ -70,6 +70,7 @@ class AskAIRequest(BaseModel):
     partnumber: str
     brand: Optional[str] = None
     prices: Optional[Dict[str, float]] = None
+    question: Optional[str] = None  # Новый вопрос пользователя в чате
 
 
 class AskAIResponse(BaseModel):
@@ -83,7 +84,7 @@ async def ask_ai(request: AskAIRequest):
     if not PERPLEXITY_API_KEY:
         raise HTTPException(status_code=500, detail="PERPLEXITY_API_KEY not configured")
 
-    # Формируем промпт
+    # Формируем контекст про деталь
     price_info = ""
     if request.prices:
         price_lines = [f"- {site}: {price}₽" for site, price in request.prices.items() if price]
@@ -92,7 +93,21 @@ async def ask_ai(request: AskAIRequest):
 
     brand_info = f" бренда {request.brand}" if request.brand else ""
 
-    prompt = f"""Расскажи про автозапчасть с артикулом {request.partnumber}{brand_info}.
+    # Если есть вопрос пользователя - это продолжение чата
+    if request.question:
+        # Контекст + новый вопрос
+        context = f"Контекст: автозапчасть с артикулом {request.partnumber}{brand_info}."
+        if price_info:
+            context += price_info
+        
+        prompt = f"""{context}
+
+Пользователь спрашивает: {request.question}
+
+Ответь на вопрос пользователя, используя контекст про эту запчасть. Отвечай на русском языке."""
+    else:
+        # Первое сообщение - автоматический рассказ про деталь
+        prompt = f"""Расскажи про автозапчасть с артикулом {request.partnumber}{brand_info}.
 
 Ответь кратко (3-5 предложений):
 1. Что это за деталь и для каких автомобилей
