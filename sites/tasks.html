@@ -259,6 +259,36 @@
         </div>
     </div>
 
+    <!-- AI Modal -->
+    <div id="ai-modal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/70" onclick="closeAIModal()"></div>
+        <div class="absolute inset-x-4 top-1/2 -translate-y-1/2 max-w-lg mx-auto bg-dark-card rounded-2xl border border-dark-border overflow-hidden">
+            <div class="px-4 py-3 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 border-b border-dark-border flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        <span>✨</span> AI Ассистент
+                    </h3>
+                    <p id="ai-modal-partnumber" class="text-sm text-purple-400 mt-0.5"></p>
+                </div>
+                <button onclick="closeAIModal()" class="text-gray-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <div id="ai-modal-loading" class="py-12 text-center">
+                <div class="w-8 h-8 mx-auto mb-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                <p class="text-sm text-gray-400">Спрашиваю Perplexity AI...</p>
+            </div>
+            <div id="ai-modal-content" class="hidden p-4">
+                <div id="ai-modal-answer" class="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap"></div>
+                <div id="ai-modal-sources" class="hidden mt-4 pt-3 border-t border-dark-border">
+                    <p class="text-xs text-gray-500 mb-2">Источники:</p>
+                    <div id="ai-modal-sources-list" class="text-xs text-blue-400 space-y-1"></div>
+                </div>
+            </div>
+            <div id="ai-modal-error" class="hidden p-4 text-center">
+                <p class="text-red-400 text-sm"></p>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API = '/api/tasks';
 
@@ -571,6 +601,16 @@
                         ${sitesList}
                     </div>
 
+                    <!-- Ask AI Button -->
+                    ${t.status === 'DONE' ? `
+                        <button
+                            onclick="event.stopPropagation(); askAI(${t.id}, '${t.partnumber}', '${t.brand || t.search_brand || ''}', ${JSON.stringify({zzap: t.zzap_min_price, stparts: t.stparts_min_price, trast: t.trast_min_price, autovid: t.autovid_min_price, autotrade: t.autotrade_min_price}).replace(/"/g, '&quot;')})"
+                            class="mt-3 w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
+                        >
+                            <span>✨</span> Спросить AI
+                        </button>
+                    ` : ''}
+
                     <!-- Error Message -->
                     ${t.error_message ? `
                         <div class="mt-2 text-xs text-red-400 bg-red-500/10 rounded p-2">
@@ -685,6 +725,63 @@
         function closeBrandModal() {
             document.getElementById('brand-modal').classList.add('hidden');
             pendingPartnumber = null;
+        }
+
+        // === AI Modal ===
+        function closeAIModal() {
+            document.getElementById('ai-modal').classList.add('hidden');
+        }
+
+        async function askAI(taskId, partnumber, brand, prices) {
+            const modal = document.getElementById('ai-modal');
+            const loading = document.getElementById('ai-modal-loading');
+            const content = document.getElementById('ai-modal-content');
+            const error = document.getElementById('ai-modal-error');
+            const answer = document.getElementById('ai-modal-answer');
+            const sourcesDiv = document.getElementById('ai-modal-sources');
+            const sourcesList = document.getElementById('ai-modal-sources-list');
+
+            // Reset modal state
+            loading.classList.remove('hidden');
+            content.classList.add('hidden');
+            error.classList.add('hidden');
+            document.getElementById('ai-modal-partnumber').textContent = `${partnumber}${brand ? ' (' + brand + ')' : ''}`;
+
+            modal.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/api/ask-ai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ partnumber, brand, prices })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Ошибка API');
+                }
+
+                const data = await response.json();
+
+                loading.classList.add('hidden');
+                content.classList.remove('hidden');
+                answer.textContent = data.answer;
+
+                // Show sources if available
+                if (data.sources && data.sources.length > 0) {
+                    sourcesDiv.classList.remove('hidden');
+                    sourcesList.innerHTML = data.sources.map(s =>
+                        `<a href="${s}" target="_blank" class="block hover:underline truncate">${s}</a>`
+                    ).join('');
+                } else {
+                    sourcesDiv.classList.add('hidden');
+                }
+
+            } catch (e) {
+                loading.classList.add('hidden');
+                error.classList.remove('hidden');
+                error.querySelector('p').textContent = e.message || 'Ошибка при запросе к AI';
+            }
         }
 
         async function selectBrand(brand) {

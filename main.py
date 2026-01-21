@@ -1,12 +1,19 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 from pathlib import Path
 from typing import Optional, Dict, Any
 import sqlite3
+import httpx
+import os
 
 from config import DB_PATH
+
+# Perplexity API
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
+PERPLEXITY_MODEL = "llama-3.1-sonar-large-128k-online"
 from backend.api.tasks_api import router as tasks_router
 from backend.api.brands_api import router as brands_router
 
@@ -59,6 +66,77 @@ async def get_article_brands(partnumber: Optional[str] = None) -> Dict[str, Any]
         conn.close()
 
     return {"brands": brands}
+
+
+# === Perplexity AI ===
+class AskAIRequest(BaseModel):
+    partnumber: str
+    brand: Optional[str] = None
+    prices: Optional[Dict[str, float]] = None
+
+
+class AskAIResponse(BaseModel):
+    answer: str
+    sources: Optional[list] = None
+
+
+@app.post("/api/ask-ai", response_model=AskAIResponse)
+async def ask_ai(request: AskAIRequest):
+    """Спросить Perplexity AI о запчасти"""
+    if not PERPLEXITY_API_KEY:
+        raise HTTPException(status_code=500, detail="PERPLEXITY_API_KEY not configured")
+
+    # Формируем промпт
+    price_info = ""
+    if request.prices:
+        price_lines = [f"- {site}: {price}₽" for site, price in request.prices.items() if price]
+        if price_lines:
+            price_info = f"\n\nНайденные цены:\n" + "\n".join(price_lines)
+
+    brand_info = f" бренда {request.brand}" if request.brand else ""
+
+    prompt = f"""Расскажи про автозапчасть с артикулом {request.partnumber}{brand_info}.
+
+Ответь кратко (3-5 предложений):
+1. Что это за деталь и для каких автомобилей
+2. Оригинал это или аналог
+3. Качество производителя{price_info}
+
+Отвечай на русском языке."""
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.perplexity.ai/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": PERPLEXITY_MODEL,
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ]
+                }
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail=f"Perplexity API error: {response.text}")
+
+            data = response.json()
+            answer = data.get("choices", [{}])[0].get("message", {}).get("content", "Нет ответа")
+
+            # Извлекаем источники если есть
+            sources = None
+            if "citations" in data:
+                sources = data["citations"]
+
+            return AskAIResponse(answer=answer, sources=sources)
+
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Perplexity API timeout")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
