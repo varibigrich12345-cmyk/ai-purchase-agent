@@ -39,9 +39,6 @@ app.include_router(brands_router, prefix="/api", tags=["brands"])
 async def root():
     return RedirectResponse(url="/tasks.html")
 
-# Статические файлы (фронтенд)
-app.mount("/", StaticFiles(directory=BASEDIR / "sites", html=True), name="static")
-
 
 @app.get("/api/article-brands")
 async def get_article_brands(partnumber: Optional[str] = None) -> Dict[str, Any]:
@@ -137,6 +134,10 @@ async def ask_ai(request: AskAIRequest):
         raise HTTPException(status_code=504, detail="Perplexity API timeout")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Статические файлы (фронтенд) - ВАЖНО: должно быть в конце, после всех API эндпоинтов!
+app.mount("/", StaticFiles(directory=BASEDIR / "sites", html=True), name="static")
 
 
 if __name__ == "__main__":
