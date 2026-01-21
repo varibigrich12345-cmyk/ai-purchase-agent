@@ -865,6 +865,19 @@
             container.scrollTop = container.scrollHeight;
         }
 
+        // Вспомогательные функции для совместимости
+        function addMessageToChat(role, text, sources = null) {
+            aiChatMessages.push({ role, text, sources });
+            renderChat();
+        }
+
+        function removeLastMessage() {
+            if (aiChatMessages.length > 0) {
+                aiChatMessages.pop();
+                renderChat();
+            }
+        }
+
         function setChatLoading(isLoading) {
             const loader = document.getElementById('ai-chat-loading');
             if (!loader) return;
@@ -945,21 +958,61 @@
         }
 
         async function sendAIChatMessage() {
-            if (!aiChatContext) return;
-
             const input = document.getElementById('ai-chat-input');
             const sendBtn = document.getElementById('ai-chat-send');
-            if (!input || !sendBtn) return;
+            
+            if (!input || !sendBtn) {
+                console.error('AI Chat: элементы не найдены');
+                return;
+            }
 
-            let question = input.value.trim();
-            if (!question) return;
+            const text = input.value.trim();
+            if (!text) {
+                console.log('AI Chat: пустое сообщение');
+                return;
+            }
+            
+            console.log('AI Chat: Отправка:', text); // Для отладки
+            
+            // Если контекст не инициализирован, пытаемся получить из последней задачи
+            if (!aiChatContext) {
+                if (allTasks && allTasks.length > 0) {
+                    const latestTask = allTasks[0];
+                    if (latestTask && latestTask.status === 'DONE') {
+                        aiChatContext = {
+                            partnumber: latestTask.partnumber,
+                            brand: latestTask.brand || latestTask.search_brand || '',
+                            prices: {
+                                zzap: latestTask.zzap_min_price,
+                                stparts: latestTask.stparts_min_price,
+                                trast: latestTask.trast_min_price,
+                                autovid: latestTask.autovid_min_price,
+                                autotrade: latestTask.autotrade_min_price
+                            }
+                        };
+                        console.log('AI Chat: контекст восстановлен из последней задачи');
+                    }
+                }
+                
+                if (!aiChatContext) {
+                    console.error('AI Chat: контекст не найден');
+                    aiChatMessages.push({
+                        role: 'ai',
+                        text: 'Ошибка: контекст не инициализирован. Дождитесь загрузки задач.'
+                    });
+                    renderChat();
+                    return;
+                }
+            }
+
+            // Показать сообщение пользователя
+            aiChatMessages.push({ role: 'user', text: text });
             input.value = '';
+            renderChat();
 
+            // Отключить элементы
             input.disabled = true;
             sendBtn.disabled = true;
-
-            aiChatMessages.push({ role: 'user', text: question });
-            renderChat();
             setChatLoading(true);
 
             try {
@@ -970,7 +1023,7 @@
                         partnumber: aiChatContext.partnumber,
                         brand: aiChatContext.brand,
                         prices: aiChatContext.prices,
-                        question
+                        question: text
                     })
                 });
 
@@ -980,10 +1033,12 @@
                 }
 
                 const data = await response.json();
+                console.log('AI Chat: получен ответ', data);
 
                 // Исправление: убеждаемся что data.answer - строка, а не объект
                 const answerText = typeof data?.answer === 'string' ? data.answer : (data?.answer ? JSON.stringify(data.answer) : 'Нет ответа');
 
+                // Показать ответ AI
                 aiChatMessages.push({
                     role: 'ai',
                     text: answerText,
@@ -992,6 +1047,7 @@
                 renderChat();
 
             } catch (e) {
+                console.error('AI Chat: ошибка', e);
                 // Исправление: правильная обработка ошибок, избегаем [object Object]
                 const errorText = e?.message || (typeof e === 'string' ? e : String(e)) || 'Ошибка при запросе к AI';
                 aiChatMessages.push({
@@ -1237,15 +1293,21 @@
         // === Обработчики событий для AI-чата ===
         (function initChatEventHandlers() {
             const sendBtn = document.getElementById('ai-chat-send');
-            const input = document.getElementById('ai-chat-input');
+            const chatInput = document.getElementById('ai-chat-input');
             
+            // Клик по кнопке
             if (sendBtn) {
-                sendBtn.addEventListener('click', sendAIChatMessage);
+                sendBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    sendAIChatMessage();
+                });
             }
             
-            if (input) {
-                input.addEventListener('keypress', (e) => {
+            // Enter в поле ввода
+            if (chatInput) {
+                chatInput.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
+                        e.preventDefault();
                         sendAIChatMessage();
                     }
                 });
