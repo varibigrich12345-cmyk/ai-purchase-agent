@@ -114,6 +114,7 @@
             border-radius: 0.75rem;
             padding: 1rem;
             margin-top: 0.75rem;
+            display: block !important; /* Всегда виден на всех устройствах */
         }
         .ai-chat-header {
             font-size: 1.125rem;
@@ -185,6 +186,20 @@
             .bg-dark-card > .flex > .relative {
                 overflow: visible !important;
                 z-index: 10;
+            }
+
+            /* AI-чат всегда виден на мобильных */
+            #ai-chat-section {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                padding: 0.75rem;
+            }
+            .ai-chat-messages {
+                max-height: 250px; /* Немного меньше на мобильных */
+            }
+            .ai-chat-input input {
+                font-size: 16px; /* Предотвращает зум на iOS */
             }
         }
 
@@ -839,6 +854,12 @@
             const chatSection = document.getElementById('ai-chat-section');
             if (!chatSection) return;
 
+            // Гарантируем что чат всегда виден на всех устройствах
+            chatSection.style.display = 'block';
+            chatSection.style.visibility = 'visible';
+            chatSection.style.opacity = '1';
+            chatSection.classList.remove('hidden');
+
             // Если контекст тот же - не перезагружаем
             if (aiChatContext && 
                 aiChatContext.partnumber === partnumber && 
@@ -1179,6 +1200,17 @@
             btn.classList.remove('bg-dark-border');
         });
 
+
+        // Гарантируем что AI-чат всегда виден на всех устройствах при загрузке
+        (function ensureChatVisible() {
+            const chatSection = document.getElementById('ai-chat-section');
+            if (chatSection) {
+                chatSection.style.display = 'block';
+                chatSection.style.visibility = 'visible';
+                chatSection.style.opacity = '1';
+                chatSection.classList.remove('hidden');
+            }
+        })();
 
         // Load
         loadTasks();
