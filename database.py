@@ -18,7 +18,8 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             partnumber TEXT NOT NULL,
@@ -38,7 +39,28 @@ def init_db():
             started_at TIMESTAMP,
             completed_at TIMESTAMP
         )
-    """)
+        """
+    )
+
+    # История цен по источникам
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS price_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            partnumber TEXT NOT NULL,
+            brand TEXT,
+            source TEXT NOT NULL,  -- zzap, stparts, autovid, trast, autotrade
+            price REAL NOT NULL,
+            recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_price_history_partnumber ON price_history(partnumber)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_price_history_recorded_at ON price_history(recorded_at)"
+    )
 
     # Миграция: добавляем новые колонки если их нет
     new_columns = [
