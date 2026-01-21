@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import sqlite3
 import httpx
 import os
@@ -65,6 +65,45 @@ async def get_article_brands(partnumber: Optional[str] = None) -> Dict[str, Any]
     return {"brands": brands}
 
 
+# === Price history API ===
+@app.get("/api/price-history/{partnumber}")
+async def get_price_history(partnumber: str, days: int = 30) -> Dict[str, Any]:
+    """
+    История цен по артикулу за N дней по всем источникам.
+    Формат: { partnumber, history: [{source, price, recorded_at, brand}, ...] }
+    """
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT partnumber, brand, source, price, recorded_at
+            FROM price_history
+            WHERE partnumber = ?
+              AND recorded_at >= datetime('now', ?)
+            ORDER BY recorded_at DESC
+            """,
+            (partnumber, f"-{int(days)} days"),
+        )
+        rows = cursor.fetchall()
+    finally:
+        conn.close()
+
+    history: List[Dict[str, Any]] = [
+        {
+            "partnumber": row["partnumber"],
+            "brand": row["brand"],
+            "source": row["source"],
+            "price": row["price"],
+            "recorded_at": row["recorded_at"],
+        }
+        for row in rows
+    ]
+
+    return {"partnumber": partnumber, "history": history}
+
+
 # === Perplexity AI ===
 class AskAIRequest(BaseModel):
     partnumber: str
@@ -89,9 +128,55 @@ async def ask_ai(request: AskAIRequest):
     if request.prices:
         price_lines = [f"- {site}: {price}₽" for site, price in request.prices.items() if price]
         if price_lines:
-            price_info = f"\n\nНайденные цены:\n" + "\n".join(price_lines)
+            price_info = f"\n\nНайденные цены (текущие):\n" + "\n".join(price_lines)
 
     brand_info = f" бренда {request.brand}" if request.brand else ""
+
+    # История цен за 30 дней по всем источникам
+    history_summary = ""
+    try:
+        conn = sqlite3.connect(str(DB_PATH))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT source, price, recorded_at
+            FROM price_history
+            WHERE partnumber = ?
+              AND recorded_at >= datetime('now', '-30 days')
+            ORDER BY recorded_at ASC
+            """,
+            (request.partnumber,),
+        )
+        rows = cursor.fetchall()
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+    if rows:
+        # Группируем по источникам и собираем краткое описание динамики
+        by_source: Dict[str, List[sqlite3.Row]] = {}
+        for row in rows:
+            by_source.setdefault(row["source"], []).append(row)
+
+        lines: List[str] = []
+        for source, items in by_source.items():
+            prices = [it["price"] for it in items]
+            if not prices:
+                continue
+            first_price = prices[0]
+            last_price = prices[-1]
+            if len(prices) == 1:
+                desc = f"{source}: около {last_price}₽ (одна точка за период)"
+            else:
+                trend = "стабильно" if abs(last_price - first_price) < 1e-6 else (
+                    "выросла" if last_price > first_price else "снизилась"
+                )
+                desc = f"{source}: {first_price}→{last_price}₽, {trend} за период (всего {len(prices)} точек)"
+            lines.append(desc)
+
+        if lines:
+            history_summary = "\n\nИстория цен за последние 30 дней:\n" + "\n".join(lines)
 
     # Если есть вопрос пользователя - это продолжение чата
     if request.question:
@@ -99,6 +184,8 @@ async def ask_ai(request: AskAIRequest):
         context = f"Контекст: автозапчасть с артикулом {request.partnumber}{brand_info}."
         if price_info:
             context += price_info
+        if history_summary:
+            context += history_summary
         
         prompt = f"""{context}
 
@@ -112,7 +199,7 @@ async def ask_ai(request: AskAIRequest):
 Ответь кратко (3-5 предложений):
 1. Что это за деталь и для каких автомобилей
 2. Оригинал это или аналог
-3. Качество производителя{price_info}
+3. Качество производителя{price_info}{history_summary}
 
 Отвечай на русском языке."""
 
