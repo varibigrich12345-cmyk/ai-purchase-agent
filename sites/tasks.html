@@ -107,6 +107,71 @@
             position: relative;
         }
 
+        /* AI Chat Section Styles */
+        .ai-chat-section {
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-top: 0.75rem;
+        }
+        .ai-chat-header {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #e5e7eb;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .ai-chat-messages {
+            min-height: 100px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 0.75rem;
+            space-y: 0.5rem;
+        }
+        .ai-chat-input {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .ai-chat-input input {
+            flex: 1;
+            background: #0f0f17;
+            border: 1px solid #2a2a4a;
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            color: white;
+            font-size: 0.875rem;
+        }
+        .ai-chat-input input::placeholder {
+            color: #6b7280;
+        }
+        .ai-chat-input input:focus {
+            outline: none;
+            border-color: #9333ea;
+            ring: 2px;
+            ring-color: #9333ea;
+        }
+        .ai-chat-input button {
+            padding: 0.5rem 1rem;
+            background: linear-gradient(to right, #9333ea, #7c3aed);
+            border: none;
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .ai-chat-input button:hover {
+            opacity: 0.9;
+        }
+        .ai-chat-input button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         /* Mobile-specific fixes */
         @media (max-width: 768px) {
             #brand-dropdown {
@@ -204,39 +269,16 @@
             <!-- Day groups will be inserted here -->
         </div>
 
-        <!-- AI Chat Block (фиксированный, между первой карточкой и остальными) -->
-        <div id="ai-chat-block" class="bg-dark-card rounded-xl border border-dark-border p-4 mt-3 hidden">
-            <div class="mb-3">
-                <h3 class="text-lg font-semibold flex items-center gap-2">
-                    <span>✨</span> AI Ассистент
-                </h3>
-                <p id="ai-chat-partnumber" class="text-sm text-purple-400 mt-0.5"></p>
-            </div>
-
-            <!-- Chat Messages Area -->
-            <div id="ai-chat-messages" class="space-y-2 mb-3 max-h-64 overflow-y-auto text-sm text-gray-200"></div>
-
-            <!-- Loading State -->
+        <!-- AI Chat Section (всегда виден, после первой группы) -->
+        <div id="ai-chat-section" class="ai-chat-section">
+            <div class="ai-chat-header">💬 AI Ассистент</div>
+            <div id="ai-chat-messages" class="ai-chat-messages"></div>
             <div id="ai-chat-loading" class="py-3 text-center text-xs text-gray-400 hidden">
                 <span>Спрашиваю Perplexity AI...</span>
             </div>
-
-            <!-- Input Area -->
-            <div class="flex gap-2">
-                <input
-                    id="ai-chat-input"
-                    type="text"
-                    placeholder="Ваш вопрос..."
-                    class="flex-1 bg-dark-bg border border-dark-border rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-                    onkeypress="if(event.key === 'Enter') sendAIChatMessage()"
-                >
-                <button
-                    id="ai-chat-send-btn"
-                    onclick="sendAIChatMessage()"
-                    class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-lg text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    Отправить
-                </button>
+            <div class="ai-chat-input">
+                <input type="text" id="ai-chat-input" placeholder="Задайте вопрос про последний артикул..." onkeypress="if(event.key === 'Enter') sendAIChatMessage()">
+                <button id="ai-chat-send" onclick="sendAIChatMessage()">➤</button>
             </div>
         </div>
 
@@ -447,7 +489,23 @@
             document.getElementById('loading-state').classList.add('hidden');
 
             // Единый дизайн: карточки с группировкой по дням
-            container.innerHTML = groups.map(g => renderDayGroup(g)).join('');
+            let html = '';
+            groups.forEach((g, index) => {
+                html += renderDayGroup(g);
+                // После первой группы вставляем AI-чат
+                if (index === 0) {
+                    html += '<div id="ai-chat-section-placeholder"></div>';
+                }
+            });
+            container.innerHTML = html;
+            
+            // Перемещаем AI-чат после первой группы
+            const placeholder = document.getElementById('ai-chat-section-placeholder');
+            const chatSection = document.getElementById('ai-chat-section');
+            if (placeholder && chatSection) {
+                placeholder.replaceWith(chatSection);
+            }
+            
             updateStats();
         }
 
@@ -753,6 +811,172 @@
             pendingPartnumber = null;
         }
 
+        // === AI Chat Block (фиксированный, между первой карточкой и остальными) ===
+        let aiChatContext = null; // { partnumber, brand, prices }
+        let aiChatMessages = []; // [{ role: 'user'|'ai', text: string, sources?: [] }]
+
+        function renderChatMessage(message) {
+            const isAI = message.role === 'ai';
+            return `
+                <div class="flex ${isAI ? 'justify-start' : 'justify-end'} mb-2">
+                    <div class="max-w-[80%] ${isAI ? 'bg-purple-600/20 border border-purple-500/30' : 'bg-dark-border'} rounded-lg px-3 py-2">
+                        <div class="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">${message.text}</div>
+                        ${message.sources && message.sources.length > 0 ? `
+                            <div class="mt-2 pt-2 border-t border-dark-border/50">
+                                <p class="text-xs text-gray-500 mb-1">Источники:</p>
+                                <div class="text-xs text-blue-400 space-y-1">
+                                    ${message.sources.map(s => `<a href="${s}" target="_blank" class="block hover:underline truncate">${s}</a>`).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderChat() {
+            const container = document.getElementById('ai-chat-messages');
+            if (!container) return;
+            if (aiChatMessages.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = aiChatMessages.map(msg => renderChatMessage(msg)).join('');
+            // Scroll to bottom
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function setChatLoading(isLoading) {
+            const loader = document.getElementById('ai-chat-loading');
+            if (!loader) return;
+            if (isLoading) loader.classList.remove('hidden');
+            else loader.classList.add('hidden');
+        }
+
+        async function initAIChat(partnumber, brand, prices) {
+            const chatSection = document.getElementById('ai-chat-section');
+            if (!chatSection) return;
+
+            // Если контекст тот же - не перезагружаем
+            if (aiChatContext && 
+                aiChatContext.partnumber === partnumber && 
+                aiChatContext.brand === brand &&
+                JSON.stringify(aiChatContext.prices) === JSON.stringify(prices) &&
+                aiChatMessages.length > 0) {
+                renderChat();
+                return;
+            }
+
+            // Обновляем контекст
+            aiChatContext = { partnumber, brand, prices };
+            aiChatMessages = [];
+            renderChat();
+
+            // Обновляем заголовок
+            const header = chatSection.querySelector('.ai-chat-header');
+            if (header) {
+                header.textContent = `💬 AI Ассистент — ${partnumber}${brand ? ' (' + brand + ')' : ''}`;
+            }
+            
+            setChatLoading(true);
+
+            try {
+                const response = await fetch('/api/ask-ai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ partnumber, brand, prices })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Ошибка API');
+                }
+
+                const data = await response.json();
+
+                // Исправление: убеждаемся что data.answer - строка, а не объект
+                const answerText = typeof data.answer === 'string' ? data.answer : JSON.stringify(data.answer);
+
+                aiChatMessages.push({
+                    role: 'ai',
+                    text: answerText,
+                    sources: data.sources
+                });
+                renderChat();
+
+            } catch (e) {
+                aiChatMessages.push({
+                    role: 'ai',
+                    text: `Ошибка: ${e.message || 'Ошибка при запросе к AI'}`
+                });
+                renderChat();
+            } finally {
+                setChatLoading(false);
+                const input = document.getElementById('ai-chat-input');
+                if (input) input.focus();
+            }
+        }
+
+        async function sendAIChatMessage() {
+            if (!aiChatContext) return;
+
+            const input = document.getElementById('ai-chat-input');
+            const sendBtn = document.getElementById('ai-chat-send');
+            if (!input || !sendBtn) return;
+
+            let question = input.value.trim();
+            if (!question) return;
+            input.value = '';
+
+            input.disabled = true;
+            sendBtn.disabled = true;
+
+            aiChatMessages.push({ role: 'user', text: question });
+            renderChat();
+            setChatLoading(true);
+
+            try {
+                const response = await fetch('/api/ask-ai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        partnumber: aiChatContext.partnumber,
+                        brand: aiChatContext.brand,
+                        prices: aiChatContext.prices,
+                        question
+                    })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Ошибка API');
+                }
+
+                const data = await response.json();
+
+                // Исправление: убеждаемся что data.answer - строка, а не объект
+                const answerText = typeof data.answer === 'string' ? data.answer : JSON.stringify(data.answer);
+
+                aiChatMessages.push({
+                    role: 'ai',
+                    text: answerText,
+                    sources: data.sources
+                });
+                renderChat();
+
+            } catch (e) {
+                aiChatMessages.push({
+                    role: 'ai',
+                    text: `Ошибка: ${e.message || 'Ошибка при запросе к AI'}`
+                });
+                renderChat();
+            } finally {
+                setChatLoading(false);
+                input.disabled = false;
+                sendBtn.disabled = false;
+                input.focus();
+            }
+        }
 
         async function selectBrand(brand) {
             if (!pendingPartnumber) return;
