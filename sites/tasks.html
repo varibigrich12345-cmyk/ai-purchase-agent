@@ -142,13 +142,16 @@
         <!-- Input Form -->
         <div class="bg-dark-card rounded-xl p-3 mb-3 border border-dark-border" style="overflow: visible;">
             <div class="flex gap-2 mb-2" style="overflow: visible;">
-                <input
-                    id="partnumber"
-                    type="text"
-                    placeholder="Артикул"
-                    autocomplete="off"
-                    class="flex-1 bg-dark-bg border border-dark-border rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-                >
+                <div class="relative flex-1" style="overflow: visible;">
+                    <input
+                        id="partnumber"
+                        type="text"
+                        placeholder="Артикул"
+                        autocomplete="off"
+                        class="w-full bg-dark-bg border border-dark-border rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                    >
+                    <div id="history-dropdown" class="hidden absolute top-full left-0 right-0 mt-1 bg-dark-card border border-dark-border rounded-lg shadow-lg z-[9999] max-h-48 overflow-y-auto"></div>
+                </div>
                 <div class="relative" style="overflow: visible; z-index: 1;">
                     <input
                         id="search-brand"
@@ -407,13 +410,8 @@
             document.getElementById('empty-state').classList.add('hidden');
             document.getElementById('loading-state').classList.add('hidden');
 
-            // Desktop: table view, Mobile: card view
-            const isDesktop = window.innerWidth >= 768;
-            if (isDesktop) {
-                container.innerHTML = renderDesktopTable(filteredTasks);
-            } else {
-                container.innerHTML = groups.map(g => renderDayGroup(g)).join('');
-            }
+            // Единый дизайн: карточки с группировкой по дням
+            container.innerHTML = groups.map(g => renderDayGroup(g)).join('');
             updateStats();
         }
 
@@ -712,6 +710,9 @@
                     body: JSON.stringify(payload)
                 });
 
+                // Сохраняем в историю
+                saveToHistory(partnumber, brand);
+
                 document.getElementById('partnumber').value = '';
                 document.getElementById('search-brand').value = '';
                 loadTasks();
@@ -752,12 +753,98 @@
 
         // Enter to submit
         document.getElementById('partnumber').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') createTask();
+            if (e.key === 'Enter') {
+                hideHistoryDropdown();
+                createTask();
+            }
         });
         document.getElementById('search-brand').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 hideBrandDropdown();
                 createTask();
+            }
+        });
+
+        // === ИСТОРИЯ АРТИКУЛОВ ===
+        const HISTORY_KEY = 'partnumber_history';
+        const MAX_HISTORY = 50;
+
+        function getHistory() {
+            try {
+                return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+            } catch {
+                return [];
+            }
+        }
+
+        function saveToHistory(partnumber, brand) {
+            if (!partnumber) return;
+            const entry = brand ? `${partnumber} (${brand})` : partnumber;
+            let history = getHistory();
+            // Удаляем дубликаты
+            history = history.filter(h => h !== entry);
+            // Добавляем в начало
+            history.unshift(entry);
+            // Ограничиваем размер
+            if (history.length > MAX_HISTORY) {
+                history = history.slice(0, MAX_HISTORY);
+            }
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+        }
+
+        function hideHistoryDropdown() {
+            const dropdown = document.getElementById('history-dropdown');
+            if (dropdown) dropdown.classList.add('hidden');
+        }
+
+        function showHistoryDropdown(filter = '') {
+            const dropdown = document.getElementById('history-dropdown');
+            if (!dropdown) return;
+
+            let history = getHistory();
+            if (filter) {
+                history = history.filter(h => h.toLowerCase().includes(filter.toLowerCase()));
+            }
+
+            if (history.length === 0) {
+                dropdown.classList.add('hidden');
+                return;
+            }
+
+            dropdown.innerHTML = history.slice(0, 10).map(h => `
+                <div class="px-3 py-2 hover:bg-purple-600 cursor-pointer text-white text-sm border-b border-dark-border/50 last:border-0"
+                     onclick="selectHistoryItem('${h.replace(/'/g, "\\'")}')">
+                    ${h}
+                </div>
+            `).join('');
+            dropdown.classList.remove('hidden');
+        }
+
+        function selectHistoryItem(item) {
+            // Парсим "ST-FDR8-087-1 (SAT)" -> partnumber и brand
+            const match = item.match(/^(.+?)\s*\((.+)\)$/);
+            if (match) {
+                document.getElementById('partnumber').value = match[1].trim();
+                document.getElementById('search-brand').value = match[2].trim();
+            } else {
+                document.getElementById('partnumber').value = item;
+            }
+            hideHistoryDropdown();
+        }
+
+        // Показывать историю при фокусе и вводе
+        document.getElementById('partnumber').addEventListener('focus', () => {
+            showHistoryDropdown(document.getElementById('partnumber').value);
+        });
+
+        document.getElementById('partnumber').addEventListener('input', (e) => {
+            showHistoryDropdown(e.target.value);
+        });
+
+        // Скрывать при клике вне
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#partnumber') && !e.target.closest('#history-dropdown')) {
+                hideHistoryDropdown();
             }
         });
 
@@ -815,12 +902,6 @@
             btn.classList.remove('bg-dark-border');
         });
 
-        // Handle resize for desktop/mobile view switching
-        let resizeTimer;
-        window.addEventListener('resize', () => {
-            clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(render, 100);
-        });
 
         // Load
         loadTasks();
