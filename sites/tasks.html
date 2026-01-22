@@ -289,6 +289,14 @@
                     >
                     <div id="brand-dropdown" class="hidden absolute top-full left-0 mt-1 w-48 bg-dark-card border border-dark-border rounded-lg shadow-lg z-[9999] max-h-48 overflow-y-auto" style="position: absolute !important; z-index: 9999 !important;"></div>
                 </div>
+                <button
+                    id="import-csv-btn"
+                    title="Импорт CSV"
+                    style="background: transparent; border: 2px solid #6b5b95; color: #6b5b95; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 16px;"
+                >
+                    📁
+                </button>
+                <input type="file" id="csv-file-input" accept=".csv,.txt" style="display:none">
             </div>
             <div class="flex gap-2">
                 <button
@@ -305,15 +313,6 @@
                     ↻
                 </button>
             </div>
-        </div>
-
-        <!-- CSV Import Row -->
-        <div style="text-align: center; margin: 15px 0;">
-            <button id="import-csv-btn" 
-                    style="background: #6b5b95; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px;">
-                📁 Импорт CSV
-            </button>
-            <input type="file" id="csv-file-input" accept=".csv,.txt" style="display:none">
         </div>
 
         <!-- Stats -->
@@ -1023,12 +1022,11 @@
                 });
                 renderChat();
 
-            } catch (e) {
-                // Исправление: правильная обработка ошибок, избегаем [object Object]
-                const errorText = e?.message || (typeof e === 'string' ? e : JSON.stringify(e)) || 'Ошибка при запросе к AI';
+            } catch (error) {
+                const errorMsg = error?.message || (typeof error === 'string' ? error : 'Неизвестная ошибка');
                 aiChatMessages.push({
                     role: 'ai',
-                    text: `Ошибка: ${errorText}`
+                    text: `Ошибка: ${errorMsg}`
                 });
                 renderChat();
             } finally {
@@ -1123,13 +1121,12 @@
                 });
                 renderChat();
 
-            } catch (e) {
-                console.error('AI Chat: ошибка', e);
-                // Исправление: правильная обработка ошибок, избегаем [object Object]
-                const errorText = e?.message || (typeof e === 'string' ? e : JSON.stringify(e)) || 'Ошибка при запросе к AI';
+            } catch (error) {
+                console.error('AI Chat: ошибка', error);
+                const errorMsg = error?.message || (typeof error === 'string' ? error : 'Неизвестная ошибка');
                 aiChatMessages.push({
                     role: 'ai',
-                    text: `Ошибка: ${errorText}`
+                    text: `Ошибка: ${errorMsg}`
                 });
                 renderChat();
             } finally {
@@ -1425,8 +1422,11 @@
             if (SpeechRecognition && voiceBtn) {
                 const recognition = new SpeechRecognition();
                 recognition.lang = 'ru-RU';
-                recognition.continuous = false;
-                recognition.interimResults = false;
+                recognition.continuous = true;        // Не останавливаться автоматически
+                recognition.interimResults = true;    // Показывать промежуточные результаты
+                
+                // Флаг для отслеживания состояния записи
+                recognition.isRecording = false;
                 
                 voiceBtn.onclick = () => {
                     // Дополнительная проверка на случай если кнопка все еще видна
@@ -1435,31 +1435,56 @@
                         return;
                     }
                     
-                    try {
-                        recognition.start();
-                        voiceBtn.textContent = '🔴';
-                        voiceBtn.classList.add('recording');
-                    } catch (e) {
-                        // Если уже запущено, игнорируем ошибку
-                        console.log('Recognition already started');
+                    if (recognition.isRecording) {
+                        // Останавливаем запись
+                        recognition.stop();
+                        recognition.isRecording = false;
+                        voiceBtn.textContent = '🎤';
+                        voiceBtn.classList.remove('recording');
+                    } else {
+                        // Начинаем запись
+                        try {
+                            recognition.start();
+                            recognition.isRecording = true;
+                            voiceBtn.textContent = '⏹️';  // Показать что идёт запись
+                            voiceBtn.classList.add('recording');
+                        } catch (e) {
+                            // Если уже запущено, игнорируем ошибку
+                            console.log('Recognition already started');
+                        }
                     }
                 };
                 
                 recognition.onresult = (event) => {
-                    const text = event.results[0][0].transcript;
                     const input = document.getElementById('ai-chat-input');
-                    if (input) {
-                        input.value = text;
-                        input.focus();
+                    if (!input) return;
+                    
+                    // Собираем все результаты (включая промежуточные)
+                    let finalText = '';
+                    let interimText = '';
+                    
+                    for (let i = 0; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript;
+                        if (event.results[i].isFinal) {
+                            finalText += transcript + ' ';
+                        } else {
+                            interimText += transcript;
+                        }
                     }
+                    
+                    // Обновляем поле ввода: финальный текст + промежуточный
+                    input.value = finalText + interimText;
+                    input.focus();
                 };
                 
                 recognition.onend = () => {
+                    recognition.isRecording = false;
                     voiceBtn.textContent = '🎤';
                     voiceBtn.classList.remove('recording');
                 };
                 
                 recognition.onerror = (event) => {
+                    recognition.isRecording = false;
                     voiceBtn.textContent = '🎤';
                     voiceBtn.classList.remove('recording');
                     console.error('Speech recognition error:', event.error);
