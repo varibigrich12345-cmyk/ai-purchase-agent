@@ -138,76 +138,186 @@ async def process_tasks():
                     print(f"[TIMING] Режим выполнения: ПАРАЛЛЕЛЬНО (asyncio.gather)")
                     print(f"[TIMING] Кэширование: ВКЛЮЧЕНО (30 минут)")
 
-                    # Функция для получения результата с кэшированием
-                    async def get_cached_result(source_name, client, cache_key_brand):
-                        """Получить результат из кэша или выполнить парсинг."""
-                        start_parser = time.time()
-                        from_cache = False
-                        
-                        # Используем отдельное подключение для безопасности при параллельном доступе
-                        cache_conn = get_db_connection()
-                        try:
-                            # Проверяем кэш
+                    # Проверяем кэш перед парсингом (используем одно подключение для чтения)
+                    cache_conn_read = get_db_connection()
+                    cache_cursor_read = cache_conn_read.cursor()
+                    
+                    def check_cache(source_name, cache_key_brand):
+                        """Проверить кэш для источника."""
+                        cache_cursor_read.execute(
+                            """
+                            SELECT price, url FROM price_cache
+                            WHERE partnumber = ? AND (? IS NULL OR brand = ?) AND source = ?
+                            AND datetime(cached_at) > datetime('now', '-30 minutes')
+                            ORDER BY cached_at DESC
+                            LIMIT 1
+                            """,
+                            (partnumber, cache_key_brand, cache_key_brand, source_name)
+                        )
+                        return cache_cursor_read.fetchone()
+                    
+                    # Проверяем кэш для всех источников
+                    zzap_cache = check_cache("zzap", search_brand)
+                    stparts_cache = check_cache("stparts", search_brand)
+                    trast_cache = check_cache("trast", search_brand)
+                    autovid_cache = check_cache("autovid", search_brand)
+                    autotrade_cache = check_cache("autotrade", search_brand)
+                    
+                    cache_conn_read.close()
+                    
+                    # Функции для парсинга с проверкой кэша
+                    async def parse_zzap():
+                        start_time = time.time()
+                        if zzap_cache:
+                            elapsed = time.time() - start_time
+                            logger.info(f"  ✅ zzap: результат из кэша (цена: {zzap_cache['price']}₽)")
+                            print(f"[TIMING] ZZAP: {elapsed:.1f} сек (ИЗ КЭША)")
+                            return {
+                                'status': 'success',
+                                'prices': {'min': zzap_cache['price'], 'avg': zzap_cache['price']},
+                                'url': zzap_cache['url'],
+                                'from_cache': True,
+                                'elapsed_time': elapsed
+                            }
+                        print(f"[TIMING] ZZAP: начало парсинга...")
+                        result = await zzap_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
+                        elapsed = time.time() - start_time
+                        if result.get('prices') and result['prices'].get('min'):
+                            cache_conn = get_db_connection()
                             cache_cursor = cache_conn.cursor()
                             cache_cursor.execute(
-                                """
-                                SELECT price, url FROM price_cache
-                                WHERE partnumber = ? AND (? IS NULL OR brand = ?) AND source = ?
-                                AND datetime(cached_at) > datetime('now', '-30 minutes')
-                                ORDER BY cached_at DESC
-                                LIMIT 1
-                                """,
-                                (partnumber, cache_key_brand, cache_key_brand, source_name)
+                                "INSERT INTO price_cache (partnumber, brand, source, price, url) VALUES (?, ?, ?, ?, ?)",
+                                (partnumber, search_brand, "zzap", result['prices']['min'], result.get('url'))
                             )
-                            cache_row = cache_cursor.fetchone()
-                            
-                            if cache_row:
-                                from_cache = True
-                                elapsed = time.time() - start_parser
-                                logger.info(f"  ✅ {source_name}: результат из кэша (цена: {cache_row['price']}₽)")
-                                print(f"[TIMING] {source_name.upper()}: {elapsed:.1f} сек (ИЗ КЭША)")
-                                return {
-                                    'status': 'success',
-                                    'prices': {'min': cache_row['price'], 'avg': cache_row['price']},
-                                    'url': cache_row['url'],
-                                    'from_cache': True,
-                                    'elapsed_time': elapsed
-                                }
-                            
-                            # Кэша нет, выполняем парсинг
-                            print(f"[TIMING] {source_name.upper()}: начало парсинга...")
-                            try:
-                                # Таймаут устанавливается снаружи в asyncio.gather()
-                                result = await client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
-                                
-                                elapsed = time.time() - start_parser
-                                
-                                # Сохраняем в кэш если есть цена
-                                if result.get('prices') and result['prices'].get('min'):
-                                    cache_cursor.execute(
-                                        """
-                                        INSERT INTO price_cache (partnumber, brand, source, price, url)
-                                        VALUES (?, ?, ?, ?, ?)
-                                        """,
-                                        (partnumber, cache_key_brand, source_name, result['prices']['min'], result.get('url'))
-                                    )
-                                    cache_conn.commit()
-                                
-                                result['elapsed_time'] = elapsed
-                                result['from_cache'] = False
-                                print(f"[TIMING] {source_name.upper()}: {elapsed:.1f} сек (ПАРСИНГ)")
-                                return result
-                            # Таймаут обрабатывается снаружи в asyncio.gather()
-                            except Exception as e:
-                                elapsed = time.time() - start_parser
-                                logger.error(f"  ❌ {source_name}: ошибка {e}")
-                                print(f"[TIMING] {source_name.upper()}: {elapsed:.1f} сек (ОШИБКА)")
-                                return {'status': 'error', 'prices': None, 'error': str(e), 'elapsed_time': elapsed, 'from_cache': False}
-                        finally:
+                            cache_conn.commit()
                             cache_conn.close()
+                        result['elapsed_time'] = elapsed
+                        result['from_cache'] = False
+                        print(f"[TIMING] ZZAP: {elapsed:.1f} сек (ПАРСИНГ)")
+                        return result
+                    
+                    async def parse_stparts():
+                        start_time = time.time()
+                        if stparts_cache:
+                            elapsed = time.time() - start_time
+                            logger.info(f"  ✅ stparts: результат из кэша (цена: {stparts_cache['price']}₽)")
+                            print(f"[TIMING] STparts: {elapsed:.1f} сек (ИЗ КЭША)")
+                            return {
+                                'status': 'success',
+                                'prices': {'min': stparts_cache['price'], 'avg': stparts_cache['price']},
+                                'url': stparts_cache['url'],
+                                'from_cache': True,
+                                'elapsed_time': elapsed
+                            }
+                        print(f"[TIMING] STparts: начало парсинга...")
+                        result = await stparts_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
+                        elapsed = time.time() - start_time
+                        if result.get('prices') and result['prices'].get('min'):
+                            cache_conn = get_db_connection()
+                            cache_cursor = cache_conn.cursor()
+                            cache_cursor.execute(
+                                "INSERT INTO price_cache (partnumber, brand, source, price, url) VALUES (?, ?, ?, ?, ?)",
+                                (partnumber, search_brand, "stparts", result['prices']['min'], result.get('url'))
+                            )
+                            cache_conn.commit()
+                            cache_conn.close()
+                        result['elapsed_time'] = elapsed
+                        result['from_cache'] = False
+                        print(f"[TIMING] STparts: {elapsed:.1f} сек (ПАРСИНГ)")
+                        return result
+                    
+                    async def parse_trast():
+                        start_time = time.time()
+                        if trast_cache:
+                            elapsed = time.time() - start_time
+                            logger.info(f"  ✅ trast: результат из кэша (цена: {trast_cache['price']}₽)")
+                            print(f"[TIMING] Trast: {elapsed:.1f} сек (ИЗ КЭША)")
+                            return {
+                                'status': 'success',
+                                'prices': {'min': trast_cache['price'], 'avg': trast_cache['price']},
+                                'url': trast_cache['url'],
+                                'from_cache': True,
+                                'elapsed_time': elapsed
+                            }
+                        print(f"[TIMING] Trast: начало парсинга...")
+                        result = await trast_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
+                        elapsed = time.time() - start_time
+                        if result.get('prices') and result['prices'].get('min'):
+                            cache_conn = get_db_connection()
+                            cache_cursor = cache_conn.cursor()
+                            cache_cursor.execute(
+                                "INSERT INTO price_cache (partnumber, brand, source, price, url) VALUES (?, ?, ?, ?, ?)",
+                                (partnumber, search_brand, "trast", result['prices']['min'], result.get('url'))
+                            )
+                            cache_conn.commit()
+                            cache_conn.close()
+                        result['elapsed_time'] = elapsed
+                        result['from_cache'] = False
+                        print(f"[TIMING] Trast: {elapsed:.1f} сек (ПАРСИНГ)")
+                        return result
+                    
+                    async def parse_autovid():
+                        start_time = time.time()
+                        if autovid_cache:
+                            elapsed = time.time() - start_time
+                            logger.info(f"  ✅ autovid: результат из кэша (цена: {autovid_cache['price']}₽)")
+                            print(f"[TIMING] AutoVID: {elapsed:.1f} сек (ИЗ КЭША)")
+                            return {
+                                'status': 'success',
+                                'prices': {'min': autovid_cache['price'], 'avg': autovid_cache['price']},
+                                'url': autovid_cache['url'],
+                                'from_cache': True,
+                                'elapsed_time': elapsed
+                            }
+                        print(f"[TIMING] AutoVID: начало парсинга...")
+                        result = await autovid_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
+                        elapsed = time.time() - start_time
+                        if result.get('prices') and result['prices'].get('min'):
+                            cache_conn = get_db_connection()
+                            cache_cursor = cache_conn.cursor()
+                            cache_cursor.execute(
+                                "INSERT INTO price_cache (partnumber, brand, source, price, url) VALUES (?, ?, ?, ?, ?)",
+                                (partnumber, search_brand, "autovid", result['prices']['min'], result.get('url'))
+                            )
+                            cache_conn.commit()
+                            cache_conn.close()
+                        result['elapsed_time'] = elapsed
+                        result['from_cache'] = False
+                        print(f"[TIMING] AutoVID: {elapsed:.1f} сек (ПАРСИНГ)")
+                        return result
+                    
+                    async def parse_autotrade():
+                        start_time = time.time()
+                        if autotrade_cache:
+                            elapsed = time.time() - start_time
+                            logger.info(f"  ✅ autotrade: результат из кэша (цена: {autotrade_cache['price']}₽)")
+                            print(f"[TIMING] AutoTrade: {elapsed:.1f} сек (ИЗ КЭША)")
+                            return {
+                                'status': 'success',
+                                'prices': {'min': autotrade_cache['price'], 'avg': autotrade_cache['price']},
+                                'url': autotrade_cache['url'],
+                                'from_cache': True,
+                                'elapsed_time': elapsed
+                            }
+                        print(f"[TIMING] AutoTrade: начало парсинга...")
+                        result = await autotrade_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
+                        elapsed = time.time() - start_time
+                        if result.get('prices') and result['prices'].get('min'):
+                            cache_conn = get_db_connection()
+                            cache_cursor = cache_conn.cursor()
+                            cache_cursor.execute(
+                                "INSERT INTO price_cache (partnumber, brand, source, price, url) VALUES (?, ?, ?, ?, ?)",
+                                (partnumber, search_brand, "autotrade", result['prices']['min'], result.get('url'))
+                            )
+                            cache_conn.commit()
+                            cache_conn.close()
+                        result['elapsed_time'] = elapsed
+                        result['from_cache'] = False
+                        print(f"[TIMING] AutoTrade: {elapsed:.1f} сек (ПАРСИНГ)")
+                        return result
 
                     # Параллельный запуск всех парсеров
-                    logger.info("🚀 Запуск всех парсеров параллельно...")
+                    logger.info("🚀 Запуск ПАРАЛЛЕЛЬНОГО поиска на всех 5 сайтах...")
                     start_parallel = time.time()
                     
                     # ПРОВЕРКА: Используется ли asyncio.gather()?
@@ -216,26 +326,11 @@ async def process_tasks():
                     
                     # Параллельный запуск всех парсеров с явным таймаутом
                     results = await asyncio.gather(
-                        asyncio.wait_for(
-                            get_cached_result("zzap", zzap_client, search_brand),
-                            timeout=SITE_TIMEOUT
-                        ),
-                        asyncio.wait_for(
-                            get_cached_result("stparts", stparts_client, search_brand),
-                            timeout=SITE_TIMEOUT
-                        ),
-                        asyncio.wait_for(
-                            get_cached_result("trast", trast_client, search_brand),
-                            timeout=SITE_TIMEOUT
-                        ),
-                        asyncio.wait_for(
-                            get_cached_result("autovid", autovid_client, search_brand),
-                            timeout=SITE_TIMEOUT
-                        ),
-                        asyncio.wait_for(
-                            get_cached_result("autotrade", autotrade_client, search_brand),
-                            timeout=SITE_TIMEOUT
-                        ),
+                        asyncio.wait_for(parse_zzap(), timeout=SITE_TIMEOUT),
+                        asyncio.wait_for(parse_stparts(), timeout=SITE_TIMEOUT),
+                        asyncio.wait_for(parse_trast(), timeout=SITE_TIMEOUT),
+                        asyncio.wait_for(parse_autovid(), timeout=SITE_TIMEOUT),
+                        asyncio.wait_for(parse_autotrade(), timeout=SITE_TIMEOUT),
                         return_exceptions=True
                     )
                     
@@ -249,7 +344,7 @@ async def process_tasks():
                     for i, (name, result) in enumerate(zip(parser_names, results)):
                         if isinstance(result, Exception):
                             if isinstance(result, asyncio.TimeoutError):
-                                logger.error(f"  ⏱️ {name}: таймаут {SITE_TIMEOUT}с")
+                                logger.warning(f"⏱️ {name} таймаут: {result}")
                                 print(f"[TIMEOUT] Парсер {name} не ответил за {SITE_TIMEOUT} сек")
                                 if i == 0:
                                     zzap_result = {'status': 'timeout', 'prices': None, 'elapsed_time': SITE_TIMEOUT, 'from_cache': False}
@@ -274,6 +369,8 @@ async def process_tasks():
                                     autovid_result = {'status': 'error', 'prices': None, 'elapsed_time': 0, 'from_cache': False}
                                 elif i == 4:
                                     autotrade_result = {'status': 'error', 'prices': None, 'elapsed_time': 0, 'from_cache': False}
+                    
+                    logger.info("✅ Параллельный поиск завершён!")
                     
                     # Выводим детальное время каждого парсера
                     print(f"[TIMING] ZZAP: {zzap_result.get('elapsed_time', 0):.1f} сек {'(КЭШ)' if zzap_result.get('from_cache') else '(ПАРСИНГ)'}")
