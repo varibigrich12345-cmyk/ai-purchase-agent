@@ -222,12 +222,38 @@
             .ai-chat-input input {
                 font-size: 16px; /* Предотвращает зум на iOS */
             }
+            
+            /* CSV Import button на мобильных */
+            .import-btn {
+                padding: 10px 16px;
+                font-size: 0.8rem;
+                margin-left: 8px;
+            }
         }
 
         @media (min-width: 768px) {
             #brand-dropdown {
                 min-width: 250px;
             }
+        }
+
+        /* CSV Import button styles */
+        .import-btn {
+            background: #4a4a6a;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-left: 10px;
+            font-size: 0.875rem;
+            transition: background 0.2s;
+        }
+        .import-btn:hover {
+            background: #5a5a7a;
+        }
+        .import-btn:active {
+            background: #3a3a5a;
         }
     </style>
 </head>
@@ -271,6 +297,19 @@
                 >
                     Найти цены
                 </button>
+                <button
+                    id="import-csv-btn"
+                    class="import-btn"
+                    title="Импорт артикулов из CSV"
+                >
+                    📁 Импорт CSV
+                </button>
+                <input
+                    type="file"
+                    id="csv-file-input"
+                    accept=".csv,.txt"
+                    hidden
+                >
                 <button
                     onclick="loadTasks()"
                     class="px-4 py-2.5 bg-dark-border hover:bg-dark-hover rounded-lg text-lg transition"
@@ -1439,6 +1478,95 @@
 
         // Инициализация обработчиков событий для AI-чата (после определения всех функций)
         initChatEventHandlers();
+        
+        // === CSV Import handlers ===
+        (function initCSVImport() {
+            const importBtn = document.getElementById('import-csv-btn');
+            const fileInput = document.getElementById('csv-file-input');
+            
+            if (importBtn && fileInput) {
+                importBtn.onclick = () => {
+                    fileInput.click();
+                };
+                
+                fileInput.onchange = async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    
+                    try {
+                        const text = await file.text();
+                        const lines = text.split('\n').filter(line => line.trim());
+                        
+                        // Пропускаем заголовок если есть
+                        const startIndex = lines[0].toLowerCase().includes('артикул') ? 1 : 0;
+                        
+                        let added = 0;
+                        let errors = 0;
+                        
+                        // Показываем индикатор загрузки
+                        importBtn.disabled = true;
+                        importBtn.textContent = '⏳ Импорт...';
+                        
+                        for (let i = startIndex; i < lines.length; i++) {
+                            const parts = lines[i].split(/[,;\t]/);
+                            const partnumber = parts[0]?.trim();
+                            const brand = parts[1]?.trim() || '';
+                            
+                            if (partnumber) {
+                                try {
+                                    const payload = { partnumber };
+                                    if (brand) {
+                                        payload.search_brand = brand;
+                                    }
+                                    
+                                    const response = await fetch('/api/tasks', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify(payload)
+                                    });
+                                    
+                                    if (response.ok) {
+                                        added++;
+                                    } else {
+                                        errors++;
+                                    }
+                                } catch (err) {
+                                    console.error(`Ошибка при добавлении ${partnumber}:`, err);
+                                    errors++;
+                                }
+                            }
+                        }
+                        
+                        // Восстанавливаем кнопку
+                        importBtn.disabled = false;
+                        importBtn.textContent = '📁 Импорт CSV';
+                        
+                        // Очищаем input чтобы можно было загрузить тот же файл снова
+                        fileInput.value = '';
+                        
+                        // Показываем результат
+                        if (errors > 0) {
+                            alert(`Добавлено: ${added} артикулов\nОшибок: ${errors}`);
+                        } else {
+                            alert(`Успешно добавлено ${added} артикулов`);
+                        }
+                        
+                        // Обновляем список задач
+                        loadTasks();
+                    } catch (err) {
+                        console.error('Ошибка при чтении CSV файла:', err);
+                        alert('Ошибка при чтении файла: ' + err.message);
+                        importBtn.disabled = false;
+                        importBtn.textContent = '📁 Импорт CSV';
+                        fileInput.value = '';
+                    }
+                };
+                
+                console.log('CSV Import: обработчики инициализированы');
+            } else {
+                console.error('CSV Import: элементы не найдены');
+            }
+        })();
         
         // Load
         loadTasks();
