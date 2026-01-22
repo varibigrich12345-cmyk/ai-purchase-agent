@@ -106,10 +106,10 @@ async def get_price_history(partnumber: str, days: int = 30) -> Dict[str, Any]:
 
 # === Perplexity AI ===
 class AskAIRequest(BaseModel):
-    partnumber: str
-    brand: Optional[str] = None
-    prices: Optional[Dict[str, float]] = None
-    question: Optional[str] = None  # Новый вопрос пользователя в чате
+    partnumber: str = ""
+    brand: str = ""
+    question: str = ""
+    prices: Optional[Dict[str, Optional[float]]] = None  # Позволяем null значения в словаре
 
 
 class AskAIResponse(BaseModel):
@@ -126,11 +126,12 @@ async def ask_ai(request: AskAIRequest):
     # Формируем контекст про деталь
     price_info = ""
     if request.prices:
-        price_lines = [f"- {site}: {price}₽" for site, price in request.prices.items() if price]
+        # Фильтруем null значения и оставляем только валидные цены
+        price_lines = [f"- {site}: {price}₽" for site, price in request.prices.items() if price is not None and price > 0]
         if price_lines:
-            price_info = f"\n\nНайденные цены (текущие):\n" + "\n".join(price_lines)
+            price_info = "\n\nНайденные цены:\n" + "\n".join(price_lines)
 
-    brand_info = f" бренда {request.brand}" if request.brand else ""
+    brand_info = f" бренда {request.brand}" if request.brand and request.brand.strip() else ""
 
     # История цен за 30 дней по всем источникам (только если есть partnumber)
     history_summary = ""

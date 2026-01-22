@@ -1001,7 +1001,18 @@
             setChatLoading(true);
 
             try {
-                const requestData = { partnumber, brand, prices };
+                // Фильтруем null значения из prices перед отправкой
+                let filteredPrices = null;
+                if (prices) {
+                    filteredPrices = Object.fromEntries(
+                        Object.entries(prices).filter(([_, price]) => price != null && price > 0)
+                    );
+                    if (Object.keys(filteredPrices).length === 0) {
+                        filteredPrices = null;
+                    }
+                }
+                
+                const requestData = { partnumber, brand, prices: filteredPrices };
                 console.log('AI Chat init: Отправка запроса:', requestData);
                 
                 const response = await fetch('/api/ask-ai', {
@@ -1026,8 +1037,36 @@
                 
                 // Проверка на ошибку от сервера
                 if (!response.ok) {
-                    const errorDetail = data?.detail || data?.message || data?.error || response.statusText || 'Ошибка сервера';
+                    let errorDetail = 'Ошибка сервера';
+                    
+                    // Обработка ошибок валидации Pydantic (422)
+                    if (response.status === 422 && data?.detail && Array.isArray(data.detail)) {
+                        // Pydantic возвращает массив ошибок валидации
+                        const validationErrors = data.detail.map(err => {
+                            const field = err.loc ? err.loc.join('.') : 'unknown';
+                            const msg = err.msg || 'Validation error';
+                            return `${field}: ${msg}`;
+                        }).join('; ');
+                        errorDetail = `Ошибка валидации: ${validationErrors}`;
+                    } else if (data?.detail) {
+                        // Обычная ошибка с полем detail
+                        if (typeof data.detail === 'string') {
+                            errorDetail = data.detail;
+                        } else if (Array.isArray(data.detail)) {
+                            errorDetail = data.detail.map(d => typeof d === 'string' ? d : JSON.stringify(d)).join('; ');
+                        } else {
+                            errorDetail = String(data.detail);
+                        }
+                    } else if (data?.message) {
+                        errorDetail = data.message;
+                    } else if (data?.error) {
+                        errorDetail = data.error;
+                    } else {
+                        errorDetail = response.statusText || 'Ошибка сервера';
+                    }
+                    
                     console.error('AI Chat init: Ошибка сервера:', errorDetail);
+                    console.error('AI Chat init: Полные данные ошибки:', data);
                     throw new Error(errorDetail);
                 }
 
@@ -1124,20 +1163,39 @@
                     if (latestTask && latestTask.status === 'DONE') {
                         currentPartnumber = latestTask.partnumber || '';
                         currentBrand = latestTask.brand || latestTask.search_brand || '';
-                        currentPrices = {
+                        // Фильтруем null значения из prices
+                        const rawPrices = {
                             zzap: latestTask.zzap_min_price,
                             stparts: latestTask.stparts_min_price,
                             trast: latestTask.trast_min_price,
                             autovid: latestTask.autovid_min_price,
                             autotrade: latestTask.autotrade_min_price
                         };
+                        // Оставляем только валидные цены (не null и > 0)
+                        currentPrices = Object.fromEntries(
+                            Object.entries(rawPrices).filter(([_, price]) => price != null && price > 0)
+                        );
+                        // Если все цены null, устанавливаем null
+                        if (Object.keys(currentPrices).length === 0) {
+                            currentPrices = null;
+                        }
                         console.log('AI Chat: контекст восстановлен из последней задачи');
                     }
                 }
             } else {
                 currentPartnumber = aiChatContext.partnumber || '';
                 currentBrand = aiChatContext.brand || '';
-                currentPrices = aiChatContext.prices || null;
+                // Фильтруем null значения из prices если они есть
+                if (aiChatContext.prices) {
+                    currentPrices = Object.fromEntries(
+                        Object.entries(aiChatContext.prices).filter(([_, price]) => price != null && price > 0)
+                    );
+                    if (Object.keys(currentPrices).length === 0) {
+                        currentPrices = null;
+                    }
+                } else {
+                    currentPrices = null;
+                }
             }
 
             // Показать сообщение пользователя
@@ -1183,8 +1241,36 @@
                 
                 // Проверка на ошибку от сервера
                 if (!response.ok) {
-                    const errorDetail = data?.detail || data?.message || data?.error || response.statusText || 'Ошибка сервера';
+                    let errorDetail = 'Ошибка сервера';
+                    
+                    // Обработка ошибок валидации Pydantic (422)
+                    if (response.status === 422 && data?.detail && Array.isArray(data.detail)) {
+                        // Pydantic возвращает массив ошибок валидации
+                        const validationErrors = data.detail.map(err => {
+                            const field = err.loc ? err.loc.join('.') : 'unknown';
+                            const msg = err.msg || 'Validation error';
+                            return `${field}: ${msg}`;
+                        }).join('; ');
+                        errorDetail = `Ошибка валидации: ${validationErrors}`;
+                    } else if (data?.detail) {
+                        // Обычная ошибка с полем detail
+                        if (typeof data.detail === 'string') {
+                            errorDetail = data.detail;
+                        } else if (Array.isArray(data.detail)) {
+                            errorDetail = data.detail.map(d => typeof d === 'string' ? d : JSON.stringify(d)).join('; ');
+                        } else {
+                            errorDetail = String(data.detail);
+                        }
+                    } else if (data?.message) {
+                        errorDetail = data.message;
+                    } else if (data?.error) {
+                        errorDetail = data.error;
+                    } else {
+                        errorDetail = response.statusText || 'Ошибка сервера';
+                    }
+                    
                     console.error('AI Chat: Ошибка сервера:', errorDetail);
+                    console.error('AI Chat: Полные данные ошибки:', data);
                     throw new Error(errorDetail);
                 }
 
