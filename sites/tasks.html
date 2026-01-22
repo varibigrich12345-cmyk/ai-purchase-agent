@@ -512,22 +512,41 @@
 
         // Render
         function render() {
-            const container = document.getElementById('tasks-container');
-            const groups = groupByDay(filteredTasks);
+            try {
+                const container = document.getElementById('tasks-container');
+                const emptyState = document.getElementById('empty-state');
+                const loadingState = document.getElementById('loading-state');
+                
+                if (!container) {
+                    console.error('render: tasks-container not found');
+                    return;
+                }
+                
+                const groups = groupByDay(filteredTasks);
 
-            if (groups.length === 0) {
-                container.innerHTML = '';
-                document.getElementById('empty-state').classList.remove('hidden');
-                document.getElementById('loading-state').classList.add('hidden');
-                return;
+                if (groups.length === 0) {
+                    container.innerHTML = '';
+                    if (emptyState) emptyState.classList.remove('hidden');
+                    if (loadingState) loadingState.classList.add('hidden');
+                    return;
+                }
+
+                if (emptyState) emptyState.classList.add('hidden');
+                if (loadingState) loadingState.classList.add('hidden');
+
+                // Единый дизайн: карточки с группировкой по дням
+                container.innerHTML = groups.map(g => renderDayGroup(g)).join('');
+                updateStats();
+            } catch (e) {
+                console.error('render error:', e);
+                const loadingState = document.getElementById('loading-state');
+                const emptyState = document.getElementById('empty-state');
+                if (loadingState) loadingState.classList.add('hidden');
+                if (emptyState) {
+                    emptyState.innerHTML = '<p class="text-4xl mb-2">⚠️</p><p class="text-sm">Ошибка отображения задач</p>';
+                    emptyState.classList.remove('hidden');
+                }
             }
-
-            document.getElementById('empty-state').classList.add('hidden');
-            document.getElementById('loading-state').classList.add('hidden');
-
-            // Единый дизайн: карточки с группировкой по дням
-            container.innerHTML = groups.map(g => renderDayGroup(g)).join('');
-            updateStats();
         }
 
         function renderDesktopTable(tasks) {
@@ -720,7 +739,13 @@
         async function loadTasks() {
             try {
                 const res = await fetch(API);
-                allTasks = await res.json();
+                if (!res.ok) {
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                }
+                const data = await res.json();
+                // Убеждаемся что данные - массив
+                allTasks = Array.isArray(data) ? data : [];
+                console.log(`loadTasks: загружено ${allTasks.length} задач`);
                 applyFilters();
                 
                 // После загрузки задач - автоматически устанавливаем контекст последнего артикула (если есть)
@@ -755,9 +780,16 @@
                     // Нет задач - просто устанавливаем базовый заголовок
                     header.textContent = '💬 AI Ассистент';
                 }
-                }
             } catch (e) {
                 console.error('loadTasks error:', e);
+                // Скрываем loading-state при ошибке
+                const loadingState = document.getElementById('loading-state');
+                const emptyState = document.getElementById('empty-state');
+                if (loadingState) loadingState.classList.add('hidden');
+                if (emptyState) {
+                    emptyState.innerHTML = '<p class="text-4xl mb-2">⚠️</p><p class="text-sm">Ошибка загрузки задач</p>';
+                    emptyState.classList.remove('hidden');
+                }
             }
         }
 
@@ -1301,28 +1333,46 @@
         })();
 
         // === Обработчики событий для AI-чата ===
-        (function initChatEventHandlers() {
+        function initChatEventHandlers() {
             const sendBtn = document.getElementById('ai-chat-send');
             const chatInput = document.getElementById('ai-chat-input');
             
             // Клик по кнопке
             if (sendBtn) {
-                sendBtn.addEventListener('click', function(e) {
+                sendBtn.onclick = function(e) {
                     e.preventDefault();
-                    sendAIChatMessage();
-                });
+                    e.stopPropagation();
+                    console.log('AI Chat: кнопка отправки нажата');
+                    if (typeof sendAIChatMessage === 'function') {
+                        sendAIChatMessage();
+                    } else {
+                        console.error('AI Chat: sendAIChatMessage is not defined');
+                    }
+                };
+                console.log('AI Chat: обработчик кнопки отправки установлен');
+            } else {
+                console.error('AI Chat: кнопка отправки не найдена');
             }
             
             // Enter в поле ввода
             if (chatInput) {
-                chatInput.addEventListener('keypress', function(e) {
+                chatInput.onkeypress = function(e) {
                     if (e.key === 'Enter') {
                         e.preventDefault();
-                        sendAIChatMessage();
+                        e.stopPropagation();
+                        console.log('AI Chat: Enter нажат');
+                        if (typeof sendAIChatMessage === 'function') {
+                            sendAIChatMessage();
+                        } else {
+                            console.error('AI Chat: sendAIChatMessage is not defined');
+                        }
                     }
-                });
+                };
+                console.log('AI Chat: обработчик Enter установлен');
+            } else {
+                console.error('AI Chat: поле ввода не найдено');
             }
-        })();
+        }
 
         // === Голосовой ввод для AI-чата ===
         (function initVoiceInput() {
@@ -1387,6 +1437,9 @@
             }
         })();
 
+        // Инициализация обработчиков событий для AI-чата (после определения всех функций)
+        initChatEventHandlers();
+        
         // Load
         loadTasks();
         setInterval(loadTasks, 3000);
