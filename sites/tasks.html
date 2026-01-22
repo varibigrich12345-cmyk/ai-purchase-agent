@@ -1001,22 +1001,56 @@
             setChatLoading(true);
 
             try {
+                const requestData = { partnumber, brand, prices };
+                console.log('AI Chat init: Отправка запроса:', requestData);
+                
                 const response = await fetch('/api/ask-ai', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ partnumber, brand, prices })
+                    body: JSON.stringify(requestData)
                 });
 
+                console.log('AI Chat init: Response status:', response.status, response.statusText);
+
                 // Читаем ответ один раз
-                const data = await response.json();
+                let data;
+                try {
+                    const responseText = await response.text();
+                    console.log('AI Chat init: Response text (raw):', responseText);
+                    data = JSON.parse(responseText);
+                    console.log('AI Chat init: Response data (parsed):', data);
+                } catch (parseError) {
+                    console.error('AI Chat init: Ошибка парсинга JSON:', parseError);
+                    throw new Error('Неверный формат ответа от сервера');
+                }
                 
                 // Проверка на ошибку от сервера
                 if (!response.ok) {
-                    throw new Error(data.detail || data.message || 'Ошибка сервера');
+                    const errorDetail = data?.detail || data?.message || data?.error || response.statusText || 'Ошибка сервера';
+                    console.error('AI Chat init: Ошибка сервера:', errorDetail);
+                    throw new Error(errorDetail);
+                }
+
+                // Проверяем структуру ответа
+                if (!data || typeof data !== 'object') {
+                    console.error('AI Chat init: Неверная структура ответа:', data);
+                    throw new Error('Неверная структура ответа от сервера');
                 }
 
                 // Отображение ответа - убеждаемся что это строка
-                const answerText = typeof data.answer === 'string' ? data.answer : (data.answer ? String(data.answer) : 'Нет ответа');
+                let answerText = 'Нет ответа';
+                if (data.answer !== undefined) {
+                    if (typeof data.answer === 'string') {
+                        answerText = data.answer;
+                    } else if (data.answer !== null) {
+                        console.warn('AI Chat init: answer не строка, преобразуем:', typeof data.answer, data.answer);
+                        answerText = String(data.answer);
+                    }
+                } else {
+                    console.warn('AI Chat init: поле answer отсутствует в ответе:', data);
+                }
+
+                console.log('AI Chat init: Финальный текст ответа:', answerText);
 
                 aiChatMessages.push({
                     role: 'ai',
@@ -1026,17 +1060,30 @@
                 renderChat();
 
             } catch (error) {
+                console.error('AI Chat init: Ошибка (полная):', error);
+                console.error('AI Chat init: Тип ошибки:', typeof error);
+                console.error('AI Chat init: error instanceof Error:', error instanceof Error);
+                
                 // Правильная обработка ошибки
                 let errorMsg = 'Неизвестная ошибка';
-                if (typeof error === 'string') {
-                    errorMsg = error;
-                } else if (error instanceof Error) {
-                    errorMsg = error.message;
-                } else if (error?.detail) {
-                    errorMsg = error.detail;
-                } else if (error?.message) {
-                    errorMsg = error.message;
+                try {
+                    if (typeof error === 'string') {
+                        errorMsg = error;
+                    } else if (error instanceof Error) {
+                        errorMsg = error.message || error.toString();
+                    } else if (error && typeof error === 'object') {
+                        // Пробуем извлечь сообщение из объекта
+                        errorMsg = error.detail || error.message || error.error || error.toString() || JSON.stringify(error);
+                    } else {
+                        errorMsg = String(error);
+                    }
+                } catch (e) {
+                    console.error('AI Chat init: Ошибка при обработке ошибки:', e);
+                    errorMsg = 'Критическая ошибка при обработке';
                 }
+                
+                console.log('AI Chat init: Финальное сообщение об ошибке:', errorMsg);
+                
                 aiChatMessages.push({
                     role: 'ai',
                     text: `Ошибка: ${errorMsg}`
@@ -1104,29 +1151,63 @@
             setChatLoading(true);
 
             try {
+                const requestData = {
+                    partnumber: currentPartnumber || '',  // Может быть пустым
+                    brand: currentBrand || '',            // Может быть пустым
+                    prices: currentPrices,
+                    question: text
+                };
+                
+                console.log('AI Chat: Отправка запроса:', requestData);
+                
                 const response = await fetch('/api/ask-ai', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        partnumber: currentPartnumber || '',  // Может быть пустым
-                        brand: currentBrand || '',            // Может быть пустым
-                        prices: currentPrices,
-                        question: text
-                    })
+                    body: JSON.stringify(requestData)
                 });
 
+                console.log('AI Chat: Response status:', response.status, response.statusText);
+                console.log('AI Chat: Response headers:', Object.fromEntries(response.headers.entries()));
+
                 // Читаем ответ один раз
-                const data = await response.json();
+                let data;
+                try {
+                    const responseText = await response.text();
+                    console.log('AI Chat: Response text (raw):', responseText);
+                    data = JSON.parse(responseText);
+                    console.log('AI Chat: Response data (parsed):', data);
+                } catch (parseError) {
+                    console.error('AI Chat: Ошибка парсинга JSON:', parseError);
+                    throw new Error('Неверный формат ответа от сервера');
+                }
                 
                 // Проверка на ошибку от сервера
                 if (!response.ok) {
-                    throw new Error(data.detail || data.message || 'Ошибка сервера');
+                    const errorDetail = data?.detail || data?.message || data?.error || response.statusText || 'Ошибка сервера';
+                    console.error('AI Chat: Ошибка сервера:', errorDetail);
+                    throw new Error(errorDetail);
                 }
 
-                console.log('AI Chat: получен ответ', data);
+                // Проверяем структуру ответа
+                if (!data || typeof data !== 'object') {
+                    console.error('AI Chat: Неверная структура ответа:', data);
+                    throw new Error('Неверная структура ответа от сервера');
+                }
 
                 // Отображение ответа - убеждаемся что это строка
-                const answerText = typeof data.answer === 'string' ? data.answer : (data.answer ? String(data.answer) : 'Нет ответа');
+                let answerText = 'Нет ответа';
+                if (data.answer !== undefined) {
+                    if (typeof data.answer === 'string') {
+                        answerText = data.answer;
+                    } else if (data.answer !== null) {
+                        console.warn('AI Chat: answer не строка, преобразуем:', typeof data.answer, data.answer);
+                        answerText = String(data.answer);
+                    }
+                } else {
+                    console.warn('AI Chat: поле answer отсутствует в ответе:', data);
+                }
+
+                console.log('AI Chat: Финальный текст ответа:', answerText);
 
                 // Показать ответ AI
                 aiChatMessages.push({
@@ -1137,18 +1218,32 @@
                 renderChat();
 
             } catch (error) {
-                console.error('AI Chat: ошибка', error);
+                console.error('AI Chat: Ошибка (полная):', error);
+                console.error('AI Chat: Тип ошибки:', typeof error);
+                console.error('AI Chat: error instanceof Error:', error instanceof Error);
+                console.error('AI Chat: error.constructor:', error?.constructor?.name);
+                console.error('AI Chat: error.toString():', error?.toString());
+                
                 // Правильная обработка ошибки
                 let errorMsg = 'Неизвестная ошибка';
-                if (typeof error === 'string') {
-                    errorMsg = error;
-                } else if (error instanceof Error) {
-                    errorMsg = error.message;
-                } else if (error?.detail) {
-                    errorMsg = error.detail;
-                } else if (error?.message) {
-                    errorMsg = error.message;
+                try {
+                    if (typeof error === 'string') {
+                        errorMsg = error;
+                    } else if (error instanceof Error) {
+                        errorMsg = error.message || error.toString();
+                    } else if (error && typeof error === 'object') {
+                        // Пробуем извлечь сообщение из объекта
+                        errorMsg = error.detail || error.message || error.error || error.toString() || JSON.stringify(error);
+                    } else {
+                        errorMsg = String(error);
+                    }
+                } catch (e) {
+                    console.error('AI Chat: Ошибка при обработке ошибки:', e);
+                    errorMsg = 'Критическая ошибка при обработке';
                 }
+                
+                console.log('AI Chat: Финальное сообщение об ошибке:', errorMsg);
+                
                 aiChatMessages.push({
                     role: 'ai',
                     text: `Ошибка: ${errorMsg}`

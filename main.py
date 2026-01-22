@@ -232,7 +232,15 @@ async def ask_ai(request: AskAIRequest):
             )
 
             if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail=f"Perplexity API error: {response.text}")
+                # Убеждаемся что ошибка - строка
+                try:
+                    error_text = response.text
+                    if isinstance(error_text, bytes):
+                        error_text = error_text.decode('utf-8')
+                    error_detail = f"Perplexity API error: {error_text}"
+                except Exception:
+                    error_detail = f"Perplexity API error: HTTP {response.status_code}"
+                raise HTTPException(status_code=response.status_code, detail=error_detail)
 
             data = response.json()
             answer = data.get("choices", [{}])[0].get("message", {}).get("content", "Нет ответа")
@@ -246,8 +254,13 @@ async def ask_ai(request: AskAIRequest):
 
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Perplexity API timeout")
+    except HTTPException:
+        # Пробрасываем HTTPException как есть
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Убеждаемся что ошибка - строка
+        error_detail = str(e) if e else "Unknown error"
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 # Статические файлы (фронтенд) - ВАЖНО: должно быть в конце, после всех API эндпоинтов!
