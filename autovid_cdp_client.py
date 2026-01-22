@@ -59,11 +59,14 @@ class AutoVidCDPClient(BaseBrowserClient):
                 locale='ru-RU',
                 timezone_id='Europe/Moscow',
                 java_script_enabled=True,
+                bypass_csp=True,
                 extra_http_headers={
                     'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
                 }
             )
-            logger.info(f"[{self.SITE_NAME}] Создан контекст браузера")
+            # Блокируем изображения, CSS и шрифты для ускорения
+            await self.context.route("**/*.{png,jpg,jpeg,gif,webp,css,woff,woff2}", lambda route: route.abort())
+            logger.info(f"[{self.SITE_NAME}] Создан контекст браузера с блокировкой ресурсов")
 
             # Anti-detection
             await self.context.add_init_script("""

@@ -90,58 +90,95 @@ async def process_tasks():
                     )
                     conn.commit()
 
-                    # Таймаут для каждого сайта (120 секунд)
-                    SITE_TIMEOUT = 120
+                    # Таймаут для каждого сайта (30 секунд)
+                    SITE_TIMEOUT = 30
 
-                    logger.info("🔵 [1/5] Поиск на ZZAP.ru...")
-                    try:
-                        zzap_result = await asyncio.wait_for(
-                            zzap_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
-                            timeout=SITE_TIMEOUT
-                        )
-                    except asyncio.TimeoutError:
-                        logger.error(f"  ⏱️ ZZAP: таймаут {SITE_TIMEOUT}с")
-                        zzap_result = {'status': 'timeout', 'prices': None}
+                    # Функция для получения результата с кэшированием
+                    async def get_cached_result(source_name, client, cache_key_brand):
+                        """Получить результат из кэша или выполнить парсинг."""
+                        # Используем отдельное подключение для безопасности при параллельном доступе
+                        cache_conn = get_db_connection()
+                        try:
+                            # Проверяем кэш
+                            cache_cursor = cache_conn.cursor()
+                            cache_cursor.execute(
+                                """
+                                SELECT price, url FROM price_cache
+                                WHERE partnumber = ? AND (? IS NULL OR brand = ?) AND source = ?
+                                AND datetime(cached_at) > datetime('now', '-30 minutes')
+                                ORDER BY cached_at DESC
+                                LIMIT 1
+                                """,
+                                (partnumber, cache_key_brand, cache_key_brand, source_name)
+                            )
+                            cache_row = cache_cursor.fetchone()
+                            
+                            if cache_row:
+                                logger.info(f"  ✅ {source_name}: результат из кэша (цена: {cache_row['price']}₽)")
+                                return {
+                                    'status': 'success',
+                                    'prices': {'min': cache_row['price'], 'avg': cache_row['price']},
+                                    'url': cache_row['url'],
+                                    'from_cache': True
+                                }
+                            
+                            # Кэша нет, выполняем парсинг
+                            try:
+                                result = await asyncio.wait_for(
+                                    client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
+                                    timeout=SITE_TIMEOUT
+                                )
+                                
+                                # Сохраняем в кэш если есть цена
+                                if result.get('prices') and result['prices'].get('min'):
+                                    cache_cursor.execute(
+                                        """
+                                        INSERT INTO price_cache (partnumber, brand, source, price, url)
+                                        VALUES (?, ?, ?, ?, ?)
+                                        """,
+                                        (partnumber, cache_key_brand, source_name, result['prices']['min'], result.get('url'))
+                                    )
+                                    cache_conn.commit()
+                                
+                                return result
+                            except asyncio.TimeoutError:
+                                logger.error(f"  ⏱️ {source_name}: таймаут {SITE_TIMEOUT}с")
+                                return {'status': 'timeout', 'prices': None}
+                            except Exception as e:
+                                logger.error(f"  ❌ {source_name}: ошибка {e}")
+                                return {'status': 'error', 'prices': None, 'error': str(e)}
+                        finally:
+                            cache_conn.close()
 
-                    logger.info("🟢 [2/5] Поиск на STparts.ru...")
-                    try:
-                        stparts_result = await asyncio.wait_for(
-                            stparts_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
-                            timeout=SITE_TIMEOUT
-                        )
-                    except asyncio.TimeoutError:
-                        logger.error(f"  ⏱️ STparts: таймаут {SITE_TIMEOUT}с")
-                        stparts_result = {'status': 'timeout', 'prices': None}
-
-                    logger.info("🟠 [3/5] Поиск на Trast.ru (stealth)...")
-                    try:
-                        trast_result = await asyncio.wait_for(
-                            trast_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
-                            timeout=SITE_TIMEOUT
-                        )
-                    except asyncio.TimeoutError:
-                        logger.error(f"  ⏱️ Trast: таймаут {SITE_TIMEOUT}с")
-                        trast_result = {'status': 'timeout', 'prices': None}
-
-                    logger.info("🟣 [4/5] Поиск на Auto-VID.com...")
-                    try:
-                        autovid_result = await asyncio.wait_for(
-                            autovid_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
-                            timeout=SITE_TIMEOUT
-                        )
-                    except asyncio.TimeoutError:
-                        logger.error(f"  ⏱️ AutoVID: таймаут {SITE_TIMEOUT}с")
-                        autovid_result = {'status': 'timeout', 'prices': None}
-
-                    logger.info("🟤 [5/5] Поиск на AutoTrade.su...")
-                    try:
-                        autotrade_result = await asyncio.wait_for(
-                            autotrade_client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
-                            timeout=SITE_TIMEOUT
-                        )
-                    except asyncio.TimeoutError:
-                        logger.error(f"  ⏱️ AutoTrade: таймаут {SITE_TIMEOUT}с")
-                        autotrade_result = {'status': 'timeout', 'prices': None}
+                    # Параллельный запуск всех парсеров
+                    logger.info("🚀 Запуск всех парсеров параллельно...")
+                    zzap_task = get_cached_result("zzap", zzap_client, search_brand)
+                    stparts_task = get_cached_result("stparts", stparts_client, search_brand)
+                    trast_task = get_cached_result("trast", trast_client, search_brand)
+                    autovid_task = get_cached_result("autovid", autovid_client, search_brand)
+                    autotrade_task = get_cached_result("autotrade", autotrade_client, search_brand)
+                    
+                    zzap_result, stparts_result, trast_result, autovid_result, autotrade_result = await asyncio.gather(
+                        zzap_task, stparts_task, trast_task, autovid_task, autotrade_task,
+                        return_exceptions=True
+                    )
+                    
+                    # Обрабатываем исключения
+                    if isinstance(zzap_result, Exception):
+                        logger.error(f"  ❌ ZZAP: исключение {zzap_result}")
+                        zzap_result = {'status': 'error', 'prices': None}
+                    if isinstance(stparts_result, Exception):
+                        logger.error(f"  ❌ STparts: исключение {stparts_result}")
+                        stparts_result = {'status': 'error', 'prices': None}
+                    if isinstance(trast_result, Exception):
+                        logger.error(f"  ❌ Trast: исключение {trast_result}")
+                        trast_result = {'status': 'error', 'prices': None}
+                    if isinstance(autovid_result, Exception):
+                        logger.error(f"  ❌ AutoVID: исключение {autovid_result}")
+                        autovid_result = {'status': 'error', 'prices': None}
+                    if isinstance(autotrade_result, Exception):
+                        logger.error(f"  ❌ AutoTrade: исключение {autotrade_result}")
+                        autotrade_result = {'status': 'error', 'prices': None}
 
                     all_prices = []
                     zzap_min = None

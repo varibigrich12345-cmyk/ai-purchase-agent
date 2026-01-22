@@ -62,6 +62,24 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_price_history_recorded_at ON price_history(recorded_at)"
     )
 
+    # Кэш цен (30 минут)
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS price_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            partnumber TEXT NOT NULL,
+            brand TEXT,
+            source TEXT NOT NULL,  -- zzap, stparts, autovid, trast, autotrade
+            price REAL,
+            url TEXT,
+            cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_price_cache_lookup ON price_cache(partnumber, brand, source, cached_at)"
+    )
+
     # Миграция: добавляем новые колонки если их нет
     new_columns = [
         'search_brand TEXT',

@@ -70,6 +70,7 @@ class TrastCDPClient(BaseBrowserClient):
                 timezone_id='Europe/Moscow',
                 proxy=proxy_config,
                 java_script_enabled=True,
+                bypass_csp=True,
                 permissions=['geolocation'],
                 color_scheme='light',
                 extra_http_headers={
@@ -80,7 +81,9 @@ class TrastCDPClient(BaseBrowserClient):
                     'sec-ch-ua-platform': '"Windows"',
                 }
             )
-            logger.info(f"[{self.SITE_NAME}] Создан stealth контекст")
+            # Блокируем изображения, CSS и шрифты для ускорения
+            await self.context.route("**/*.{png,jpg,jpeg,gif,webp,css,woff,woff2}", lambda route: route.abort())
+            logger.info(f"[{self.SITE_NAME}] Создан stealth контекст с блокировкой ресурсов")
 
             # Anti-detection scripts
             await self.context.add_init_script("""
