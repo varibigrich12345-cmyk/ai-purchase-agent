@@ -298,19 +298,6 @@
                     Найти цены
                 </button>
                 <button
-                    id="import-csv-btn"
-                    class="import-btn"
-                    title="Импорт артикулов из CSV"
-                >
-                    📁 Импорт CSV
-                </button>
-                <input
-                    type="file"
-                    id="csv-file-input"
-                    accept=".csv,.txt"
-                    hidden
-                >
-                <button
                     onclick="loadTasks()"
                     class="px-4 py-2.5 bg-dark-border hover:bg-dark-hover rounded-lg text-lg transition"
                     title="Обновить"
@@ -318,6 +305,15 @@
                     ↻
                 </button>
             </div>
+        </div>
+
+        <!-- CSV Import Row -->
+        <div style="text-align: center; margin: 15px 0;">
+            <button id="import-csv-btn" 
+                    style="background: #6b5b95; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                📁 Импорт CSV
+            </button>
+            <input type="file" id="csv-file-input" accept=".csv,.txt" style="display:none">
         </div>
 
         <!-- Stats -->
@@ -1029,7 +1025,7 @@
 
             } catch (e) {
                 // Исправление: правильная обработка ошибок, избегаем [object Object]
-                const errorText = e?.message || (typeof e === 'string' ? e : String(e)) || 'Ошибка при запросе к AI';
+                const errorText = e?.message || (typeof e === 'string' ? e : JSON.stringify(e)) || 'Ошибка при запросе к AI';
                 aiChatMessages.push({
                     role: 'ai',
                     text: `Ошибка: ${errorText}`
@@ -1130,7 +1126,7 @@
             } catch (e) {
                 console.error('AI Chat: ошибка', e);
                 // Исправление: правильная обработка ошибок, избегаем [object Object]
-                const errorText = e?.message || (typeof e === 'string' ? e : String(e)) || 'Ошибка при запросе к AI';
+                const errorText = e?.message || (typeof e === 'string' ? e : JSON.stringify(e)) || 'Ошибка при запросе к AI';
                 aiChatMessages.push({
                     role: 'ai',
                     text: `Ошибка: ${errorText}`
