@@ -55,14 +55,50 @@ async def process_tasks():
 
     # Подключаемся к Chrome через CDP
     logger.info("🔧 Подключение к Chrome CDP...")
-
-    async with ZZapCDPClient() as zzap_client, STPartsCDPClient() as stparts_client, TrastCDPClient() as trast_client, AutoVidCDPClient() as autovid_client, AutoTradeClient() as autotrade_client:
-        logger.info("  ✅ ZZAP клиент подключён")
-        logger.info("  ✅ STparts клиент подключён")
-        logger.info("  ✅ Trast клиент подключён (stealth режим)")
-        logger.info("  ✅ AutoVID клиент подключён")
-        logger.info("  ✅ AutoTrade клиент подключён")
-        logger.info("✅ Все клиенты готовы к работе!")
+    
+    # Создаём клиенты
+    zzap_client = ZZapCDPClient()
+    stparts_client = STPartsCDPClient()
+    trast_client = TrastCDPClient()
+    autovid_client = AutoVidCDPClient()
+    autotrade_client = AutoTradeClient()
+    
+    # Параллельная инициализация всех клиентов
+    logger.info("🚀 Параллельная инициализация клиентов...")
+    init_results = await asyncio.gather(
+        zzap_client.connect(),
+        stparts_client.connect(),
+        trast_client.connect(),
+        autovid_client.connect(),
+        autotrade_client.connect(),
+        return_exceptions=True
+    )
+    
+    # Проверяем результаты инициализации
+    clients_ok = True
+    for i, (name, result) in enumerate([
+        ("ZZAP", init_results[0]),
+        ("STparts", init_results[1]),
+        ("Trast", init_results[2]),
+        ("AutoVID", init_results[3]),
+        ("AutoTrade", init_results[4])
+    ]):
+        if isinstance(result, Exception):
+            logger.error(f"  ❌ {name} клиент: ошибка подключения {result}")
+            clients_ok = False
+        elif result:
+            logger.info(f"  ✅ {name} клиент подключён")
+        else:
+            logger.error(f"  ❌ {name} клиент: подключение не удалось")
+            clients_ok = False
+    
+    if not clients_ok:
+        logger.error("❌ Не все клиенты подключены, завершение работы")
+        return
+    
+    logger.info("✅ Все клиенты готовы к работе!")
+    
+    try:
 
         while True:
             conn = None
@@ -141,10 +177,8 @@ async def process_tasks():
                             # Кэша нет, выполняем парсинг
                             print(f"[TIMING] {source_name.upper()}: начало парсинга...")
                             try:
-                                result = await asyncio.wait_for(
-                                    client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2),
-                                    timeout=SITE_TIMEOUT
-                                )
+                                # Таймаут устанавливается снаружи в asyncio.gather()
+                                result = await client.search_part_with_retry(partnumber, brand_filter=search_brand, max_retries=2)
                                 
                                 elapsed = time.time() - start_parser
                                 
@@ -163,11 +197,7 @@ async def process_tasks():
                                 result['from_cache'] = False
                                 print(f"[TIMING] {source_name.upper()}: {elapsed:.1f} сек (ПАРСИНГ)")
                                 return result
-                            except asyncio.TimeoutError:
-                                elapsed = time.time() - start_parser
-                                logger.error(f"  ⏱️ {source_name}: таймаут {SITE_TIMEOUT}с")
-                                print(f"[TIMING] {source_name.upper()}: {elapsed:.1f} сек (ТАЙМАУТ)")
-                                return {'status': 'timeout', 'prices': None, 'elapsed_time': elapsed, 'from_cache': False}
+                            # Таймаут обрабатывается снаружи в asyncio.gather()
                             except Exception as e:
                                 elapsed = time.time() - start_parser
                                 logger.error(f"  ❌ {source_name}: ошибка {e}")
@@ -180,40 +210,70 @@ async def process_tasks():
                     logger.info("🚀 Запуск всех парсеров параллельно...")
                     start_parallel = time.time()
                     
-                    zzap_task = get_cached_result("zzap", zzap_client, search_brand)
-                    stparts_task = get_cached_result("stparts", stparts_client, search_brand)
-                    trast_task = get_cached_result("trast", trast_client, search_brand)
-                    autovid_task = get_cached_result("autovid", autovid_client, search_brand)
-                    autotrade_task = get_cached_result("autotrade", autotrade_client, search_brand)
-                    
                     # ПРОВЕРКА: Используется ли asyncio.gather()?
                     print(f"[TIMING] Используется asyncio.gather(): ДА")
                     print(f"[TIMING] Парсеры запускаются: ПАРАЛЛЕЛЬНО")
                     
-                    zzap_result, stparts_result, trast_result, autovid_result, autotrade_result = await asyncio.gather(
-                        zzap_task, stparts_task, trast_task, autovid_task, autotrade_task,
+                    # Параллельный запуск всех парсеров с явным таймаутом
+                    results = await asyncio.gather(
+                        asyncio.wait_for(
+                            get_cached_result("zzap", zzap_client, search_brand),
+                            timeout=SITE_TIMEOUT
+                        ),
+                        asyncio.wait_for(
+                            get_cached_result("stparts", stparts_client, search_brand),
+                            timeout=SITE_TIMEOUT
+                        ),
+                        asyncio.wait_for(
+                            get_cached_result("trast", trast_client, search_brand),
+                            timeout=SITE_TIMEOUT
+                        ),
+                        asyncio.wait_for(
+                            get_cached_result("autovid", autovid_client, search_brand),
+                            timeout=SITE_TIMEOUT
+                        ),
+                        asyncio.wait_for(
+                            get_cached_result("autotrade", autotrade_client, search_brand),
+                            timeout=SITE_TIMEOUT
+                        ),
                         return_exceptions=True
                     )
+                    
+                    zzap_result, stparts_result, trast_result, autovid_result, autotrade_result = results
                     
                     parallel_elapsed = time.time() - start_parallel
                     print(f"[TIMING] Параллельное выполнение завершено за: {parallel_elapsed:.1f} сек")
                     
-                    # Обрабатываем исключения
-                    if isinstance(zzap_result, Exception):
-                        logger.error(f"  ❌ ZZAP: исключение {zzap_result}")
-                        zzap_result = {'status': 'error', 'prices': None, 'elapsed_time': 0, 'from_cache': False}
-                    if isinstance(stparts_result, Exception):
-                        logger.error(f"  ❌ STparts: исключение {stparts_result}")
-                        stparts_result = {'status': 'error', 'prices': None, 'elapsed_time': 0, 'from_cache': False}
-                    if isinstance(trast_result, Exception):
-                        logger.error(f"  ❌ Trast: исключение {trast_result}")
-                        trast_result = {'status': 'error', 'prices': None, 'elapsed_time': 0, 'from_cache': False}
-                    if isinstance(autovid_result, Exception):
-                        logger.error(f"  ❌ AutoVID: исключение {autovid_result}")
-                        autovid_result = {'status': 'error', 'prices': None, 'elapsed_time': 0, 'from_cache': False}
-                    if isinstance(autotrade_result, Exception):
-                        logger.error(f"  ❌ AutoTrade: исключение {autotrade_result}")
-                        autotrade_result = {'status': 'error', 'prices': None, 'elapsed_time': 0, 'from_cache': False}
+                    # Обрабатываем исключения и таймауты
+                    parser_names = ["ZZAP", "STparts", "Trast", "AutoVID", "AutoTrade"]
+                    for i, (name, result) in enumerate(zip(parser_names, results)):
+                        if isinstance(result, Exception):
+                            if isinstance(result, asyncio.TimeoutError):
+                                logger.error(f"  ⏱️ {name}: таймаут {SITE_TIMEOUT}с")
+                                print(f"[TIMEOUT] Парсер {name} не ответил за {SITE_TIMEOUT} сек")
+                                if i == 0:
+                                    zzap_result = {'status': 'timeout', 'prices': None, 'elapsed_time': SITE_TIMEOUT, 'from_cache': False}
+                                elif i == 1:
+                                    stparts_result = {'status': 'timeout', 'prices': None, 'elapsed_time': SITE_TIMEOUT, 'from_cache': False}
+                                elif i == 2:
+                                    trast_result = {'status': 'timeout', 'prices': None, 'elapsed_time': SITE_TIMEOUT, 'from_cache': False}
+                                elif i == 3:
+                                    autovid_result = {'status': 'timeout', 'prices': None, 'elapsed_time': SITE_TIMEOUT, 'from_cache': False}
+                                elif i == 4:
+                                    autotrade_result = {'status': 'timeout', 'prices': None, 'elapsed_time': SITE_TIMEOUT, 'from_cache': False}
+                            else:
+                                logger.error(f"  ❌ {name}: исключение {result}")
+                                print(f"[ERROR] Парсер {name}: {result}")
+                                if i == 0:
+                                    zzap_result = {'status': 'error', 'prices': None, 'elapsed_time': 0, 'from_cache': False}
+                                elif i == 1:
+                                    stparts_result = {'status': 'error', 'prices': None, 'elapsed_time': 0, 'from_cache': False}
+                                elif i == 2:
+                                    trast_result = {'status': 'error', 'prices': None, 'elapsed_time': 0, 'from_cache': False}
+                                elif i == 3:
+                                    autovid_result = {'status': 'error', 'prices': None, 'elapsed_time': 0, 'from_cache': False}
+                                elif i == 4:
+                                    autotrade_result = {'status': 'error', 'prices': None, 'elapsed_time': 0, 'from_cache': False}
                     
                     # Выводим детальное время каждого парсера
                     print(f"[TIMING] ZZAP: {zzap_result.get('elapsed_time', 0):.1f} сек {'(КЭШ)' if zzap_result.get('from_cache') else '(ПАРСИНГ)'}")
@@ -439,6 +499,19 @@ async def process_tasks():
             finally:
                 if conn:
                     conn.close()
+    
+    # Закрываем все клиенты
+    finally:
+        logger.info("🔌 Закрытие всех клиентов...")
+        await asyncio.gather(
+            zzap_client.disconnect() if hasattr(zzap_client, 'disconnect') else asyncio.sleep(0),
+            stparts_client.disconnect() if hasattr(stparts_client, 'disconnect') else asyncio.sleep(0),
+            trast_client.disconnect() if hasattr(trast_client, 'disconnect') else asyncio.sleep(0),
+            autovid_client.disconnect() if hasattr(autovid_client, 'disconnect') else asyncio.sleep(0),
+            autotrade_client.disconnect() if hasattr(autotrade_client, 'disconnect') else asyncio.sleep(0),
+            return_exceptions=True
+        )
+        logger.info("✅ Все клиенты закрыты")
 
 if __name__ == "__main__":
     try:
