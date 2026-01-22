@@ -947,7 +947,9 @@
 
         // Вспомогательные функции для совместимости
         function addMessageToChat(role, text, sources = null) {
-            aiChatMessages.push({ role, text, sources });
+            // Убеждаемся что text - строка
+            const textStr = typeof text === 'string' ? text : (text ? String(text) : '');
+            aiChatMessages.push({ role, text: textStr, sources });
             renderChat();
         }
 
@@ -1005,15 +1007,16 @@
                     body: JSON.stringify({ partnumber, brand, prices })
                 });
 
+                // Читаем ответ один раз
+                const data = await response.json();
+                
+                // Проверка на ошибку от сервера
                 if (!response.ok) {
-                    const errData = await response.json();
-                    throw new Error(errData.detail || 'Ошибка API');
+                    throw new Error(data.detail || data.message || 'Ошибка сервера');
                 }
 
-                const data = await response.json();
-
-                // Исправление: убеждаемся что data.answer - строка, а не объект
-                const answerText = typeof data.answer === 'string' ? data.answer : JSON.stringify(data.answer);
+                // Отображение ответа - убеждаемся что это строка
+                const answerText = typeof data.answer === 'string' ? data.answer : (data.answer ? String(data.answer) : 'Нет ответа');
 
                 aiChatMessages.push({
                     role: 'ai',
@@ -1023,7 +1026,17 @@
                 renderChat();
 
             } catch (error) {
-                const errorMsg = error?.message || (typeof error === 'string' ? error : 'Неизвестная ошибка');
+                // Правильная обработка ошибки
+                let errorMsg = 'Неизвестная ошибка';
+                if (typeof error === 'string') {
+                    errorMsg = error;
+                } else if (error instanceof Error) {
+                    errorMsg = error.message;
+                } else if (error?.detail) {
+                    errorMsg = error.detail;
+                } else if (error?.message) {
+                    errorMsg = error.message;
+                }
                 aiChatMessages.push({
                     role: 'ai',
                     text: `Ошибка: ${errorMsg}`
@@ -1102,16 +1115,18 @@
                     })
                 });
 
+                // Читаем ответ один раз
+                const data = await response.json();
+                
+                // Проверка на ошибку от сервера
                 if (!response.ok) {
-                    const errData = await response.json();
-                    throw new Error(errData?.detail || errData?.message || 'Ошибка API');
+                    throw new Error(data.detail || data.message || 'Ошибка сервера');
                 }
 
-                const data = await response.json();
                 console.log('AI Chat: получен ответ', data);
 
-                // Исправление: убеждаемся что data.answer - строка, а не объект
-                const answerText = typeof data?.answer === 'string' ? data.answer : (data?.answer ? JSON.stringify(data.answer) : 'Нет ответа');
+                // Отображение ответа - убеждаемся что это строка
+                const answerText = typeof data.answer === 'string' ? data.answer : (data.answer ? String(data.answer) : 'Нет ответа');
 
                 // Показать ответ AI
                 aiChatMessages.push({
@@ -1123,7 +1138,17 @@
 
             } catch (error) {
                 console.error('AI Chat: ошибка', error);
-                const errorMsg = error?.message || (typeof error === 'string' ? error : 'Неизвестная ошибка');
+                // Правильная обработка ошибки
+                let errorMsg = 'Неизвестная ошибка';
+                if (typeof error === 'string') {
+                    errorMsg = error;
+                } else if (error instanceof Error) {
+                    errorMsg = error.message;
+                } else if (error?.detail) {
+                    errorMsg = error.detail;
+                } else if (error?.message) {
+                    errorMsg = error.message;
+                }
                 aiChatMessages.push({
                     role: 'ai',
                     text: `Ошибка: ${errorMsg}`
