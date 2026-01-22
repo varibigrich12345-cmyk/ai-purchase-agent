@@ -308,7 +308,7 @@
                 <span>Спрашиваю Perplexity AI...</span>
             </div>
             <div class="ai-chat-input">
-                <input type="text" id="ai-chat-input" placeholder="Задайте вопрос про последний артикул...">
+                <input type="text" id="ai-chat-input" placeholder="Задайте вопрос...">
                 <button id="ai-voice-btn" class="voice-btn">🎤</button>
                 <button id="ai-chat-send">➤</button>
             </div>
@@ -723,7 +723,10 @@
                 allTasks = await res.json();
                 applyFilters();
                 
-                // После загрузки задач - инициализируем AI-чат для последнего (первого в списке) артикула
+                // После загрузки задач - автоматически устанавливаем контекст последнего артикула (если есть)
+                const chatSection = document.getElementById('ai-chat-section');
+                const header = chatSection?.querySelector('.ai-chat-header');
+                
                 if (allTasks.length > 0) {
                     const latestTask = allTasks[0]; // Первая задача - самая новая
                     if (latestTask.status === 'DONE') {
@@ -734,13 +737,24 @@
                             autovid: latestTask.autovid_min_price,
                             autotrade: latestTask.autotrade_min_price
                         };
-                        // Инициализируем сразу, без задержки
-                        initAIChat(
-                            latestTask.partnumber,
-                            latestTask.brand || latestTask.search_brand || '',
-                            prices
-                        );
+                        // Устанавливаем контекст, но не инициализируем чат автоматически
+                        aiChatContext = {
+                            partnumber: latestTask.partnumber,
+                            brand: latestTask.brand || latestTask.search_brand || '',
+                            prices: prices
+                        };
+                        // Обновляем заголовок чата
+                        if (header) {
+                            header.textContent = `💬 AI Ассистент — ${latestTask.partnumber}${aiChatContext.brand ? ' (' + aiChatContext.brand + ')' : ''}`;
+                        }
+                    } else if (header && !aiChatContext) {
+                        // Нет готовых задач - просто устанавливаем базовый заголовок
+                        header.textContent = '💬 AI Ассистент';
                     }
+                } else if (header && !aiChatContext) {
+                    // Нет задач - просто устанавливаем базовый заголовок
+                    header.textContent = '💬 AI Ассистент';
+                }
                 }
             } catch (e) {
                 console.error('loadTasks error:', e);
@@ -975,34 +989,30 @@
             console.log('AI Chat: Отправка:', text); // Для отладки
             
             // Если контекст не инициализирован, пытаемся получить из последней задачи
+            let currentPartnumber = '';
+            let currentBrand = '';
+            let currentPrices = null;
+            
             if (!aiChatContext) {
                 if (allTasks && allTasks.length > 0) {
                     const latestTask = allTasks[0];
                     if (latestTask && latestTask.status === 'DONE') {
-                        aiChatContext = {
-                            partnumber: latestTask.partnumber,
-                            brand: latestTask.brand || latestTask.search_brand || '',
-                            prices: {
-                                zzap: latestTask.zzap_min_price,
-                                stparts: latestTask.stparts_min_price,
-                                trast: latestTask.trast_min_price,
-                                autovid: latestTask.autovid_min_price,
-                                autotrade: latestTask.autotrade_min_price
-                            }
+                        currentPartnumber = latestTask.partnumber || '';
+                        currentBrand = latestTask.brand || latestTask.search_brand || '';
+                        currentPrices = {
+                            zzap: latestTask.zzap_min_price,
+                            stparts: latestTask.stparts_min_price,
+                            trast: latestTask.trast_min_price,
+                            autovid: latestTask.autovid_min_price,
+                            autotrade: latestTask.autotrade_min_price
                         };
                         console.log('AI Chat: контекст восстановлен из последней задачи');
                     }
                 }
-                
-                if (!aiChatContext) {
-                    console.error('AI Chat: контекст не найден');
-                    aiChatMessages.push({
-                        role: 'ai',
-                        text: 'Ошибка: контекст не инициализирован. Дождитесь загрузки задач.'
-                    });
-                    renderChat();
-                    return;
-                }
+            } else {
+                currentPartnumber = aiChatContext.partnumber || '';
+                currentBrand = aiChatContext.brand || '';
+                currentPrices = aiChatContext.prices || null;
             }
 
             // Показать сообщение пользователя
@@ -1020,9 +1030,9 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        partnumber: aiChatContext.partnumber,
-                        brand: aiChatContext.brand,
-                        prices: aiChatContext.prices,
+                        partnumber: currentPartnumber || '',  // Может быть пустым
+                        brand: currentBrand || '',            // Может быть пустым
+                        prices: currentPrices,
                         question: text
                     })
                 });

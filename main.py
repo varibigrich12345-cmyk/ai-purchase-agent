@@ -132,26 +132,29 @@ async def ask_ai(request: AskAIRequest):
 
     brand_info = f" бренда {request.brand}" if request.brand else ""
 
-    # История цен за 30 дней по всем источникам
+    # История цен за 30 дней по всем источникам (только если есть partnumber)
     history_summary = ""
-    try:
-        conn = sqlite3.connect(str(DB_PATH))
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT source, price, recorded_at
-            FROM price_history
-            WHERE partnumber = ?
-              AND recorded_at >= datetime('now', '-30 days')
-            ORDER BY recorded_at ASC
-            """,
-            (request.partnumber,),
-        )
-        rows = cursor.fetchall()
-    finally:
-        if 'conn' in locals():
-            conn.close()
+    if request.partnumber:
+        try:
+            conn = sqlite3.connect(str(DB_PATH))
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT source, price, recorded_at
+                FROM price_history
+                WHERE partnumber = ?
+                  AND recorded_at >= datetime('now', '-30 days')
+                ORDER BY recorded_at ASC
+                """,
+                (request.partnumber,),
+            )
+            rows = cursor.fetchall()
+        finally:
+            if 'conn' in locals():
+                conn.close()
+    else:
+        rows = []
 
     if rows:
         # Группируем по источникам и собираем краткое описание динамики
@@ -181,20 +184,26 @@ async def ask_ai(request: AskAIRequest):
     # Если есть вопрос пользователя - это продолжение чата
     if request.question:
         # Контекст + новый вопрос
-        context = f"Контекст: автозапчасть с артикулом {request.partnumber}{brand_info}."
-        if price_info:
-            context += price_info
-        if history_summary:
-            context += history_summary
-        
-        prompt = f"""{context}
+        if request.partnumber:
+            context = f"Контекст: автозапчасть с артикулом {request.partnumber}{brand_info}."
+            if price_info:
+                context += price_info
+            if history_summary:
+                context += history_summary
+            prompt = f"""{context}
 
 Пользователь спрашивает: {request.question}
 
 Ответь на вопрос пользователя, используя контекст про эту запчасть. Отвечай на русском языке."""
+        else:
+            # Нет контекста артикула - просто отвечаем на вопрос
+            prompt = f"""Пользователь спрашивает: {request.question}
+
+Ответь на вопрос пользователя. Отвечай на русском языке."""
     else:
-        # Первое сообщение - автоматический рассказ про деталь
-        prompt = f"""Расскажи про автозапчасть с артикулом {request.partnumber}{brand_info}.
+        # Первое сообщение - автоматический рассказ про деталь (только если есть partnumber)
+        if request.partnumber:
+            prompt = f"""Расскажи про автозапчасть с артикулом {request.partnumber}{brand_info}.
 
 Ответь кратко (3-5 предложений):
 1. Что это за деталь и для каких автомобилей
@@ -202,6 +211,9 @@ async def ask_ai(request: AskAIRequest):
 3. Качество производителя{price_info}{history_summary}
 
 Отвечай на русском языке."""
+        else:
+            # Нет артикула - просто приветствие
+            prompt = """Привет! Я AI-ассистент для помощи с автозапчастями. Задай мне вопрос, и я постараюсь помочь. Отвечай на русском языке."""
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
