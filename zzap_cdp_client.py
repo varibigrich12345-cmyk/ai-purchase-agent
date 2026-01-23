@@ -348,15 +348,19 @@ class ZZapCDPClient(BaseBrowserClient):
 
             for row_idx, row in enumerate(rows, 1):
                 try:
+                    # Получаем ID строки (DXDataRow<N>)
+                    row_id = await row.get_attribute('id') or f"row_{row_idx}"
+                    
                     cells = await row.locator("td").all()
                     row_text = await row.inner_text()
+
+                    # ВЫВОДИМ ПОЛНЫЙ ТЕКСТ СТРОКИ для отладки (первые 200 символов)
+                    logger.info(f"[zzap] 📋 Строка {row_idx} (ID: {row_id}): {row_text[:200]}")
 
                     # Пропускаем служебные строки
                     if "Свернуть" in row_text or "Запрошенный номер" in row_text:
                         logger.debug(f"[zzap] Пропуск служебной строки {row_idx}: {row_text[:80]}")
                         continue
-                    
-                    logger.debug(f"[zzap] Обработка строки {row_idx}: {row_text[:150]}")
 
                     # ИСКЛЮЧАЕМ б/у товары (строки с "б/у", "б у", "уценка", "бывш")
                     # Берем все НОВЫЕ товары: и "В наличии", и "под заказ"
@@ -365,18 +369,27 @@ class ZZapCDPClient(BaseBrowserClient):
                     
                     # Строгая проверка на б/у товары - проверяем различные варианты написания
                     # Проверяем в полном тексте строки (регистронезависимо)
-                    is_used = (
-                        "б/у" in row_text_lower or 
-                        "б у" in row_text_lower or
-                        "б/у и уценка" in row_text_lower or
-                        "б у и уценка" in row_text_lower or
-                        "уценка" in row_text_lower or  # "уценка" сама по себе указывает на б/у
-                        "бывш" in row_text_lower or  # "бывший в употреблении"
-                        "в употреблении" in row_text_lower
-                    )
+                    has_bu = "б/у" in row_text_lower or "б у" in row_text_lower
+                    has_uzenka = "уценка" in row_text_lower
+                    has_bu_and_uzenka = "б/у и уценка" in row_text_lower or "б у и уценка" in row_text_lower
+                    has_byvsh = "бывш" in row_text_lower or "в употреблении" in row_text_lower
+                    
+                    is_used = has_bu or has_uzenka or has_bu_and_uzenka or has_byvsh
                     
                     if is_used:
-                        logger.info(f"[zzap] ⛔ ПРОПУСК б/у товара (фильтр применен ДО извлечения цен): {row_text[:150]}")
+                        # Детальное логирование причины пропуска
+                        reasons = []
+                        if has_bu:
+                            reasons.append("'б/у'")
+                        if has_uzenka:
+                            reasons.append("'уценка'")
+                        if has_bu_and_uzenka:
+                            reasons.append("'б/у и уценка'")
+                        if has_byvsh:
+                            reasons.append("'бывш'")
+                        
+                        logger.info(f"[zzap] ⛔ ПРОПУСК б/у товара (ID: {row_id}) - найдено: {', '.join(reasons)}")
+                        logger.info(f"[zzap] ⛔ Полный текст строки: {row_text[:300]}")
                         continue
                     
                     # Логируем статус товара для отладки
@@ -472,8 +485,8 @@ class ZZapCDPClient(BaseBrowserClient):
                                             status_info = " [в наличии]"
                                         
                                         # Детальное логирование найденной цены
-                                        logger.info(f"[zzap] ✅ НАЙДЕНА ЦЕНА: {price}₽{status_info} | поставщик: {supplier_name} | бренд: {row_brand}")
-                                        logger.debug(f"[zzap] Полный текст строки: {row_text[:200]}")
+                                        logger.info(f"[zzap] ✅ НАЙДЕНА ЦЕНА: {price}₽{status_info} | ID: {row_id} | поставщик: {supplier_name} | бренд: {row_brand}")
+                                        logger.debug(f"[zzap] Полный текст строки (ID: {row_id}): {row_text[:200]}")
                                 except ValueError:
                                     continue
 
