@@ -348,11 +348,18 @@ class ZZapCDPClient(BaseBrowserClient):
                     if "Свернуть" in row_text or "Запрошенный номер" in row_text:
                         continue
 
-                    # Пропускаем б/у товары
+                    # Пропускаем только б/у товары (исключаем из поиска минимальной цены)
+                    # Берем все новые товары: и "В наличии", и "под заказ"
                     row_text_lower = row_text.lower()
                     if "б/у" in row_text_lower or "уценка" in row_text_lower:
                         logger.debug(f"[zzap] Пропуск б/у: {row_text[:80]}")
                         continue
+                    
+                    # Логируем статус товара для отладки
+                    if "под заказ" in row_text_lower:
+                        logger.debug(f"[zzap] Товар под заказ: {row_text[:80]}")
+                    elif "в наличии" in row_text_lower:
+                        logger.debug(f"[zzap] Товар в наличии: {row_text[:80]}")
 
                     # Нужно минимум 10 ячеек для строки с данными
                     if len(cells) < 10:
@@ -419,7 +426,13 @@ class ZZapCDPClient(BaseBrowserClient):
                                     price = float(price_str)
                                     if 50 < price < 500000:
                                         prices.append(price)
-                                        logger.info(f"[zzap] Цена: {price}₽ | {supplier_name} | бренд: {row_brand}")
+                                        # Логируем статус товара для отладки
+                                        status_info = ""
+                                        if "под заказ" in row_text_lower:
+                                            status_info = " [под заказ]"
+                                        elif "в наличии" in row_text_lower:
+                                            status_info = " [в наличии]"
+                                        logger.info(f"[zzap] Цена: {price}₽{status_info} | {supplier_name} | бренд: {row_brand}")
                                 except ValueError:
                                     continue
 

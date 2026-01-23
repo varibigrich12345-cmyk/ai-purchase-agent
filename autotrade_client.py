@@ -189,24 +189,16 @@ class AutoTradeClient(BaseBrowserClient):
 
             await asyncio.sleep(2)
 
-            # Проверяем наличие результатов
-            page_text = await self.page.inner_text('body')
-            no_results_indicators = [
-                'ничего не найдено',
-                'нет результатов',
-                'не найдено',
-                'no results',
-            ]
-
-            for indicator in no_results_indicators:
-                if indicator.lower() in page_text.lower():
-                    return {
-                        'partnumber': partnumber,
-                        'status': 'NO_RESULTS',
-                        'prices': None,
-                        'brand': None,
-                        'url': self.page.url
-                    }
+            # Проверяем наличие результатов ПЕРЕД парсингом цен
+            if await self._check_no_results():
+                logger.info("[autotrade] Товар не найден - возвращаем NO_RESULTS без парсинга")
+                return {
+                    'partnumber': partnumber,
+                    'status': 'NO_RESULTS',
+                    'prices': None,
+                    'brand': None,
+                    'url': self.page.url
+                }
 
             # Парсинг результатов
             data = await self._extract_prices_and_brand(brand_filter=brand_filter)
@@ -274,6 +266,42 @@ class AutoTradeClient(BaseBrowserClient):
             'url': self.page.url if self.page else None
         }
 
+    async def _check_no_results(self) -> bool:
+        """Проверить, есть ли сообщение об отсутствии результатов на странице.
+
+        Returns:
+            True если товар не найден, False если результаты есть
+        """
+        try:
+            page_text = await self.page.inner_text('body')
+            page_text_lower = page_text.lower()
+
+            # Логируем первые 500 символов для отладки
+            logger.info(f"[autotrade] Текст страницы (первые 500 символов): {page_text[:500]}")
+
+            no_results_indicators = [
+                'по вашему запросу ничего не найдено',
+                'ничего не найдено',
+                'нет результатов',
+                'ничего',  # Простой маркер
+                'no results',
+            ]
+
+            for indicator in no_results_indicators:
+                if indicator in page_text_lower:
+                    logger.info(f"[autotrade] Найдено сообщение об отсутствии результатов: '{indicator}'")
+                    return True
+
+            # Дополнительная проверка: если нет таблицы с "Артикул:" - значит нет результатов
+            if 'артикул:' not in page_text_lower:
+                logger.info("[autotrade] Не найден маркер 'Артикул:' - считаем что нет результатов")
+                return True
+
+            return False
+        except Exception as e:
+            logger.error(f"[autotrade] Ошибка проверки отсутствия результатов: {e}")
+            return False
+
     async def _extract_prices_and_brand(self, brand_filter: str = None) -> Dict[str, Any]:
         """Извлечь цены, бренд и наличие из результатов sklad.autotrade.su.
 
@@ -312,19 +340,10 @@ class AutoTradeClient(BaseBrowserClient):
                 brand = brand_match.group(1).strip()
                 logger.info(f"[autotrade] Найден бренд: {brand}")
 
-            # Извлекаем все цены
-            price_matches = re.findall(price_pattern, body_text)
-            for pm in price_matches:
-                try:
-                    price_str = pm.replace(" ", "").replace("\xa0", "").replace(",", ".")
-                    price_val = float(price_str)
-                    # Фильтруем разумные цены (исключаем 0.00 и слишком большие)
-                    if 10 < price_val < 500000:
-                        prices.append(price_val)
-                except ValueError:
-                    pass
+            # НЕ извлекаем цены из всего body_text - там может быть баланс счёта!
+            # Цены извлекаем ТОЛЬКО из строк таблицы с "Артикул:"
 
-            # Ищем наличие (числа в ячейках таблицы)
+            # Ищем наличие и цены ТОЛЬКО в строках с товарами
             stock_values = []
             tables = self.page.locator('table')
             tables_count = await tables.count()
@@ -338,8 +357,10 @@ class AutoTradeClient(BaseBrowserClient):
                     row = rows.nth(r_idx)
                     row_text = await row.inner_text()
 
-                    # Ищем строки с данными о товаре (содержат "Артикул:" или цену RUB)
-                    if 'Артикул:' in row_text or 'RUB' in row_text:
+                    # ВАЖНО: Парсим цены ТОЛЬКО из строк с "Артикул:" (это строки товаров)
+                    # Это исключает парсинг баланса счёта из левой панели
+                    if 'Артикул:' not in row_text:
+                        continue
                         # Извлекаем цену из этой строки
                         row_price_match = re.search(r'(\d[\d\s,\.]*)\s*RUB', row_text)
                         if row_price_match:

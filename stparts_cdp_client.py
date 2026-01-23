@@ -70,6 +70,12 @@ class STPartsCDPClient(BaseBrowserClient):
             await self.page.goto(login_url, wait_until='networkidle', timeout=60000)
             await self.page.wait_for_timeout(2000)
 
+            # Отладка - сохраняем скриншот и HTML
+            await self.page.screenshot(path='/tmp/stparts_login.png')
+            html_content = await self.page.content()
+            logger.info(f"[stparts] HTML страницы (первые 2000 символов): {html_content[:2000]}")
+            logger.info(f"[stparts] URL страницы: {self.page.url}")
+
             # Заполняем логин (input[name="login"])
             login_field = 'input[name="login"]'
             if await self.page.locator(login_field).count() > 0:
@@ -140,34 +146,35 @@ class STPartsCDPClient(BaseBrowserClient):
             brand_filter: Фильтр по бренду (необязательно)
         """
         try:
-            # Переходим на страницу клиентов где есть поиск
-            await self.page.goto(f"{self.BASE_URL}/clients", wait_until='networkidle', timeout=60000)
-            await self.page.wait_for_timeout(2000)
-
-            # Ищем поле поиска по артикулу (input[name="pcode"])
-            search_field = 'input[name="pcode"]'
-            if await self.page.locator(search_field).count() > 0:
-                await self.page.fill(search_field, partnumber)
-                await self.page.press(search_field, "Enter")
-            else:
-                return {
-                    'partnumber': partnumber,
-                    'status': 'error',
-                    'prices': {'min': None, 'avg': None},
-                    'error': 'Поле поиска не найдено'
-                }
-
-            logger.info(f"[stparts] Поиск: {partnumber}")
-            await self.page.wait_for_timeout(5000)
-
-            # Если указан brand_filter, ищем и кликаем на нужный бренд в списке
+            # Если указан brand_filter - сразу переходим на URL результатов
             if brand_filter:
-                logger.info(f"[stparts] Пробуем найти и кликнуть на бренд '{brand_filter}'...")
-                clicked = await self._click_brand_row(brand_filter)
-                if clicked:
-                    await self.page.wait_for_timeout(3000)
-                    logger.info(f"[stparts] Успешно кликнули на бренд '{brand_filter}'")
+                # Бренд в URL может содержать дефис вместо пробелов (Peugeot-Citroen)
+                brand_url = brand_filter.replace(' ', '-')
+                search_url = f"{self.BASE_URL}/search/{brand_url}/{partnumber}"
+                logger.info(f"[stparts] Переход на URL результатов: {search_url}")
+                await self.page.goto(search_url, wait_until='networkidle', timeout=60000)
+                await self.page.wait_for_timeout(3000)
             else:
+                # Если brand_filter не указан - используем старый метод через /clients
+                await self.page.goto(f"{self.BASE_URL}/clients", wait_until='networkidle', timeout=60000)
+                await self.page.wait_for_timeout(2000)
+
+                # Ищем поле поиска по артикулу (input[name="pcode"])
+                search_field = 'input[name="pcode"]'
+                if await self.page.locator(search_field).count() > 0:
+                    await self.page.fill(search_field, partnumber)
+                    await self.page.press(search_field, "Enter")
+                else:
+                    return {
+                        'partnumber': partnumber,
+                        'status': 'error',
+                        'prices': {'min': None, 'avg': None},
+                        'error': 'Поле поиска не найдено'
+                    }
+
+                logger.info(f"[stparts] Поиск: {partnumber}")
+                await self.page.wait_for_timeout(5000)
+
                 # Пробуем нажать "Цены и аналоги"
                 try:
                     link = self.page.get_by_role("link", name="Цены и аналоги").first
