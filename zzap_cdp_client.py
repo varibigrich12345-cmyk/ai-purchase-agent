@@ -151,12 +151,19 @@ class ZZapCDPClient(BaseBrowserClient):
                     'url': self.page.url
                 }
 
+            # Выбираем минимальную цену среди всех НОВЫХ товаров (исключая б/у)
+            min_price = min(prices)
+            avg_price = round(sum(prices) / len(prices), 2)
+            
+            logger.info(f"[zzap] Все найденные цены (новые товары): {sorted(prices)}")
+            logger.info(f"[zzap] Минимальная цена: {min_price}₽ (средняя: {avg_price}₽)")
+
             return {
                 'partnumber': partnumber,
                 'status': 'DONE',
                 'prices': {
-                    'min': min(prices),
-                    'avg': round(sum(prices) / len(prices), 2)
+                    'min': min_price,
+                    'avg': avg_price
                 },
                 'brand': brand,
                 'url': self.page.url
@@ -339,20 +346,37 @@ class ZZapCDPClient(BaseBrowserClient):
             if brand_filter:
                 logger.info(f"[zzap] Фильтрация по бренду: {brand_filter}")
 
-            for row in rows:
+            for row_idx, row in enumerate(rows, 1):
                 try:
                     cells = await row.locator("td").all()
                     row_text = await row.inner_text()
 
                     # Пропускаем служебные строки
                     if "Свернуть" in row_text or "Запрошенный номер" in row_text:
+                        logger.debug(f"[zzap] Пропуск служебной строки {row_idx}: {row_text[:80]}")
                         continue
+                    
+                    logger.debug(f"[zzap] Обработка строки {row_idx}: {row_text[:150]}")
 
-                    # Пропускаем только б/у товары (исключаем из поиска минимальной цены)
-                    # Берем все новые товары: и "В наличии", и "под заказ"
+                    # ИСКЛЮЧАЕМ б/у товары (строки с "б/у", "б у", "уценка", "бывш")
+                    # Берем все НОВЫЕ товары: и "В наличии", и "под заказ"
+                    # ВАЖНО: фильтр применяется ДО извлечения цен!
                     row_text_lower = row_text.lower()
-                    if "б/у" in row_text_lower or "уценка" in row_text_lower:
-                        logger.debug(f"[zzap] Пропуск б/у: {row_text[:80]}")
+                    
+                    # Строгая проверка на б/у товары - проверяем различные варианты написания
+                    # Проверяем в полном тексте строки (регистронезависимо)
+                    is_used = (
+                        "б/у" in row_text_lower or 
+                        "б у" in row_text_lower or
+                        "б/у и уценка" in row_text_lower or
+                        "б у и уценка" in row_text_lower or
+                        "уценка" in row_text_lower or  # "уценка" сама по себе указывает на б/у
+                        "бывш" in row_text_lower or  # "бывший в употреблении"
+                        "в употреблении" in row_text_lower
+                    )
+                    
+                    if is_used:
+                        logger.info(f"[zzap] ⛔ ПРОПУСК б/у товара (фильтр применен ДО извлечения цен): {row_text[:150]}")
                         continue
                     
                     # Логируем статус товара для отладки
@@ -385,9 +409,23 @@ class ZZapCDPClient(BaseBrowserClient):
                         # Если не удалось определить бренд строки - пропускаем
                         if not row_brand:
                             continue
-                        if brand_filter.lower() not in row_brand.lower():
+                        
+                        # Проверяем: бренд должен начинаться с фильтра ИЛИ содержать его
+                        # Примеры: "FORD" → проходит "FORD", "FORD JMC", "FORD USA"
+                        brand_filter_lower = brand_filter.lower()
+                        row_brand_lower = row_brand.lower()
+                        
+                        brand_matches = (
+                            row_brand_lower.startswith(brand_filter_lower) or
+                            brand_filter_lower in row_brand_lower
+                        )
+                        
+                        if not brand_matches:
+                            logger.debug(f"[zzap] Пропуск: бренд '{row_brand}' не соответствует фильтру '{brand_filter}'")
                             continue
+                        
                         filtered_count += 1
+                        logger.debug(f"[zzap] Бренд совпал: '{row_brand}' соответствует фильтру '{brand_filter}'")
 
                     # Ищем цены в ячейках с ценой (pricewhitecell или другие классы цен)
                     # Расширенный поиск: ищем все ячейки содержащие "р."
@@ -432,7 +470,10 @@ class ZZapCDPClient(BaseBrowserClient):
                                             status_info = " [под заказ]"
                                         elif "в наличии" in row_text_lower:
                                             status_info = " [в наличии]"
-                                        logger.info(f"[zzap] Цена: {price}₽{status_info} | {supplier_name} | бренд: {row_brand}")
+                                        
+                                        # Детальное логирование найденной цены
+                                        logger.info(f"[zzap] ✅ НАЙДЕНА ЦЕНА: {price}₽{status_info} | поставщик: {supplier_name} | бренд: {row_brand}")
+                                        logger.debug(f"[zzap] Полный текст строки: {row_text[:200]}")
                                 except ValueError:
                                     continue
 
