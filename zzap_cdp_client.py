@@ -121,6 +121,22 @@ class ZZapCDPClient(BaseBrowserClient):
 
             await asyncio.sleep(2)
 
+            # Скроллим страницу для подгрузки всех данных
+            logger.info("[zzap] Скролл страницы для подгрузки данных...")
+            await self.page.evaluate('''
+                async () => {
+                    const table = document.querySelector('#ctl00_BodyPlace_SearchGridView_DXMainTable');
+                    if (table) {
+                        // Скроллим к концу таблицы
+                        table.scrollIntoView({behavior: 'instant', block: 'end'});
+                        await new Promise(r => setTimeout(r, 500));
+                        // Скроллим обратно к началу
+                        table.scrollIntoView({behavior: 'instant', block: 'start'});
+                    }
+                }
+            ''')
+            await asyncio.sleep(1)
+
             # Парсинг цен и бренда (с фильтрацией если указан brand_filter)
             data = await self._extract_prices_and_brand(brand_filter=brand_filter)
             prices = data['prices']
@@ -332,8 +348,15 @@ class ZZapCDPClient(BaseBrowserClient):
                     if "Свернуть" in row_text or "Запрошенный номер" in row_text:
                         continue
 
+                    # Пропускаем б/у товары
+                    row_text_lower = row_text.lower()
+                    if "б/у" in row_text_lower or "уценка" in row_text_lower:
+                        logger.debug(f"[zzap] Пропуск б/у: {row_text[:80]}")
+                        continue
+
                     # Нужно минимум 10 ячеек для строки с данными
                     if len(cells) < 10:
+                        logger.debug(f"[zzap] Пропуск строки: мало ячеек ({len(cells)})")
                         continue
 
                     # Извлекаем бренд из ячейки [2] (PEUGEOT CITROEN)
@@ -359,9 +382,26 @@ class ZZapCDPClient(BaseBrowserClient):
                             continue
                         filtered_count += 1
 
-                    # Ищем цены ТОЛЬКО в ячейках с классом pricewhitecell (основная цена)
-                    # Пропускаем служебные ячейки и минимальный заказ
-                    price_cells = await row.locator("td.pricewhitecell").all()
+                    # Ищем цены в ячейках с ценой (pricewhitecell или другие классы цен)
+                    # Расширенный поиск: ищем все ячейки содержащие "р."
+                    price_cells = await row.locator("td.pricewhitecell, td.pricecell, td[class*='price']").all()
+
+                    # Если не нашли по классам - ищем во всех ячейках
+                    if not price_cells:
+                        price_cells = cells
+
+                    # Логируем поставщика для отладки (ячейка с названием магазина)
+                    supplier_name = ""
+                    try:
+                        # Обычно название поставщика в одной из первых ячеек
+                        for idx in range(min(5, len(cells))):
+                            cell_txt = await cells[idx].inner_text()
+                            if cell_txt and len(cell_txt) > 3 and not cell_txt.isdigit():
+                                if "р." not in cell_txt and "₽" not in cell_txt:
+                                    supplier_name = cell_txt.strip()[:30]
+                                    break
+                    except:
+                        pass
 
                     for cell in price_cells:
                         cell_text = await cell.inner_text()
@@ -379,7 +419,7 @@ class ZZapCDPClient(BaseBrowserClient):
                                     price = float(price_str)
                                     if 50 < price < 500000:
                                         prices.append(price)
-                                        logger.debug(f"[zzap] Цена: {price}₽ (бренд: {row_brand})")
+                                        logger.info(f"[zzap] Цена: {price}₽ | {supplier_name} | бренд: {row_brand}")
                                 except ValueError:
                                     continue
 
