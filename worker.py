@@ -73,7 +73,7 @@ async def process_tasks():
         autotrade_client.connect(),
         return_exceptions=True
     )
-    
+
     # Проверяем результаты инициализации
     clients_ok = True
     for i, (name, result) in enumerate([
@@ -225,7 +225,7 @@ async def process_tasks():
                         result['from_cache'] = False
                         print(f"[TIMING] STparts: {elapsed:.1f} сек (ПАРСИНГ)")
                         return result
-                    
+
                     async def parse_trast():
                         start_time = time.time()
                         if trast_cache:
@@ -319,11 +319,11 @@ async def process_tasks():
                     # Параллельный запуск всех парсеров
                     logger.info("🚀 Запуск ПАРАЛЛЕЛЬНОГО поиска на всех 5 сайтах...")
                     start_parallel = time.time()
-                    
+
                     # ПРОВЕРКА: Используется ли asyncio.gather()?
                     print(f"[TIMING] Используется asyncio.gather(): ДА")
                     print(f"[TIMING] Парсеры запускаются: ПАРАЛЛЕЛЬНО")
-                    
+
                     # Параллельный запуск всех парсеров с явным таймаутом
                     results = await asyncio.gather(
                         asyncio.wait_for(parse_zzap(), timeout=SITE_TIMEOUT),
@@ -333,7 +333,7 @@ async def process_tasks():
                         asyncio.wait_for(parse_autotrade(), timeout=SITE_TIMEOUT),
                         return_exceptions=True
                     )
-                    
+
                     zzap_result, stparts_result, trast_result, autovid_result, autotrade_result = results
                     
                     parallel_elapsed = time.time() - start_parallel
@@ -371,7 +371,7 @@ async def process_tasks():
                                     autotrade_result = {'status': 'error', 'prices': None, 'elapsed_time': 0, 'from_cache': False}
                     
                     logger.info("✅ Параллельный поиск завершён!")
-                    
+
                     # Выводим детальное время каждого парсера
                     print(f"[TIMING] ZZAP: {zzap_result.get('elapsed_time', 0):.1f} сек {'(КЭШ)' if zzap_result.get('from_cache') else '(ПАРСИНГ)'}")
                     print(f"[TIMING] STparts: {stparts_result.get('elapsed_time', 0):.1f} сек {'(КЭШ)' if stparts_result.get('from_cache') else '(ПАРСИНГ)'}")
@@ -557,7 +557,7 @@ async def process_tasks():
                         1 if autotrade_result.get('from_cache') else 0,
                     ])
                     parsed_count = 5 - from_cache_count
-                    
+
                     print(f"\n[TIMING] {'='*60}")
                     print(f"[TIMING] ИТОГО: {total_elapsed:.1f} сек")
                     print(f"[TIMING] Из кэша: {from_cache_count}/5 парсеров")
