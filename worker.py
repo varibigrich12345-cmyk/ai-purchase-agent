@@ -132,9 +132,10 @@ async def process_tasks():
                     )
                     conn.commit()
 
-                    # Таймаут для каждого сайта (30 секунд)
+                    # Таймаут для каждого сайта (30 секунд, ZZAP - 60 сек)
                     SITE_TIMEOUT = 30
-                    print(f"[TIMING] Таймаут установлен: {SITE_TIMEOUT} сек")
+                    ZZAP_TIMEOUT = 60
+                    print(f"[TIMING] Таймаут: {SITE_TIMEOUT} сек (ZZAP: {ZZAP_TIMEOUT} сек)")
                     print(f"[TIMING] Режим выполнения: ПАРАЛЛЕЛЬНО (asyncio.gather)")
                     print(f"[TIMING] Кэширование: ВКЛЮЧЕНО (30 минут)")
 
@@ -326,7 +327,7 @@ async def process_tasks():
 
                     # Параллельный запуск всех парсеров с явным таймаутом
                     results = await asyncio.gather(
-                        asyncio.wait_for(parse_zzap(), timeout=SITE_TIMEOUT),
+                        asyncio.wait_for(parse_zzap(), timeout=ZZAP_TIMEOUT),
                         asyncio.wait_for(parse_stparts(), timeout=SITE_TIMEOUT),
                         asyncio.wait_for(parse_trast(), timeout=SITE_TIMEOUT),
                         asyncio.wait_for(parse_autovid(), timeout=SITE_TIMEOUT),
@@ -344,10 +345,11 @@ async def process_tasks():
                     for i, (name, result) in enumerate(zip(parser_names, results)):
                         if isinstance(result, Exception):
                             if isinstance(result, asyncio.TimeoutError):
+                                timeout_used = ZZAP_TIMEOUT if i == 0 else SITE_TIMEOUT
                                 logger.warning(f"⏱️ {name} таймаут: {result}")
-                                print(f"[TIMEOUT] Парсер {name} не ответил за {SITE_TIMEOUT} сек")
+                                print(f"[TIMEOUT] Парсер {name} не ответил за {timeout_used} сек")
                                 if i == 0:
-                                    zzap_result = {'status': 'timeout', 'prices': None, 'elapsed_time': SITE_TIMEOUT, 'from_cache': False}
+                                    zzap_result = {'status': 'timeout', 'prices': None, 'elapsed_time': ZZAP_TIMEOUT, 'from_cache': False}
                                 elif i == 1:
                                     stparts_result = {'status': 'timeout', 'prices': None, 'elapsed_time': SITE_TIMEOUT, 'from_cache': False}
                                 elif i == 2:
