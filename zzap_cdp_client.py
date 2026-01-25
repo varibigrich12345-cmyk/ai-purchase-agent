@@ -361,7 +361,7 @@ class ZZapCDPClient(BaseBrowserClient):
 
             rows = await table.locator("tr").all()
             total_rows = len(rows)
-            rows = rows[:10]  # Ограничение: ZZAP сортирует по цене, минимальная в первых строках
+            rows = rows[:20]  # Ограничение: берём первые 20 строк для захвата цен из разных секций
             logger.info(f"[zzap] Строк в таблице: {total_rows}, обрабатываем: {len(rows)}")
 
             if brand_filter:
