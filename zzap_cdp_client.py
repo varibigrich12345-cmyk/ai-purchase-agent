@@ -440,19 +440,11 @@ class ZZapCDPClient(BaseBrowserClient):
                         filtered_count += 1
                         logger.debug(f"[zzap] Бренд совпал: '{row_brand}' соответствует фильтру '{brand_filter}'")
 
-                    # Ищем цены в ячейках с ценой (pricewhitecell или другие классы цен)
-                    # Расширенный поиск: ищем все ячейки содержащие "р."
-                    price_cells = await row.locator("td.pricewhitecell, td.pricecell, td[class*='price']").all()
-
-                    # Если не нашли по классам - ищем во всех ячейках
-                    if not price_cells:
-                        price_cells = cells
-
                     # Логируем поставщика для отладки (ячейка с названием магазина)
                     supplier_name = ""
                     try:
-                        # Обычно название поставщика в одной из первых ячеек
-                        for idx in range(min(5, len(cells))):
+                        # Обычно название поставщика в одной из последних ячеек
+                        for idx in range(max(0, len(cells) - 3), len(cells)):
                             cell_txt = await cells[idx].inner_text()
                             if cell_txt and len(cell_txt) > 3 and not cell_txt.isdigit():
                                 if "р." not in cell_txt and "₽" not in cell_txt:
@@ -461,34 +453,68 @@ class ZZapCDPClient(BaseBrowserClient):
                     except:
                         pass
 
-                    for cell in price_cells:
-                        cell_text = await cell.inner_text()
-
-                        # Пропускаем ячейки с минимальным заказом, сроком и т.п.
-                        if any(x in cell_text.lower() for x in ['заказ от', 'дн.', 'дней', 'шт.']):
+                    # НОВЫЙ ПОДХОД: парсим по ЯЧЕЙКАМ таблицы
+                    # Цена находится в ячейке "Цена и условия" (обычно 6-7 ячейка)
+                    # В этой ячейке ищем ПЕРВОЕ число с "р." - это цена товара
+                    # "Заказ от X р." идет ПОСЛЕ цены, поэтому первое число = цена
+                    
+                    price = None
+                    price_cell_index = None
+                    price_cell_text = None
+                    
+                    # Ищем ячейку с ценой (содержит "р.")
+                    for idx, cell in enumerate(cells):
+                        try:
+                            cell_text = await cell.inner_text()
+                            if "р." in cell_text:
+                                # Удаляем паттерн "Заказ от [число] р." перед извлечением цены
+                                # Это позволяет игнорировать минимальный заказ и найти реальную цену товара
+                                cleaned_text = re.sub(r'Заказ от\s*[\d\s]+р\.?', '', cell_text, flags=re.IGNORECASE)
+                                
+                                # Если удалили "Заказ от", логируем
+                                if cleaned_text != cell_text:
+                                    logger.debug(f"[zzap] Удален паттерн 'Заказ от X р.' из ячейки {idx}")
+                                    logger.debug(f"[zzap] Оригинальный текст: {cell_text[:100]}")
+                                    logger.debug(f"[zzap] Очищенный текст: {cleaned_text[:100]}")
+                                
+                                # Ищем цену в очищенном тексте (это реальная цена товара)
+                                for match in re.finditer(r'(\d[\d\s\xa0]*)\s*р\.', cleaned_text):
+                                    price_str = match.group(1).replace(" ", "").replace("\xa0", "").replace("\n", "")
+                                    try:
+                                        candidate_price = float(price_str)
+                                        if 50 < candidate_price < 500000:  # Разумный диапазон цен
+                                            # Это реальная цена товара (не из "Заказ от")
+                                            price = candidate_price
+                                            price_cell_index = idx
+                                            price_cell_text = cell_text.strip()
+                                            logger.debug(f"[zzap] Найдена цена {price}₽ в ячейке {idx} (после удаления 'Заказ от'): {cleaned_text[:100]}")
+                                            break  # Берем первую найденную цену
+                                    except ValueError:
+                                        continue
+                                
+                                # Если нашли цену в этой ячейке, выходим из цикла по ячейкам
+                                if price:
+                                    break
+                        except Exception as e:
+                            logger.debug(f"[zzap] Ошибка при обработке ячейки {idx}: {e}")
                             continue
-
-                        # Ищем цену: число + "р." (не обязательно в начале)
-                        if "р." in cell_text:
-                            match = re.search(r'(\d[\d\s\xa0]*)\s*р\.', cell_text.strip())
-                            if match:
-                                price_str = match.group(1).replace(" ", "").replace("\xa0", "")
-                                try:
-                                    price = float(price_str)
-                                    if 50 < price < 500000:
-                                        prices.append(price)
-                                        # Логируем статус товара для отладки
-                                        status_info = ""
-                                        if "под заказ" in row_text_lower:
-                                            status_info = " [под заказ]"
-                                        elif "в наличии" in row_text_lower:
-                                            status_info = " [в наличии]"
-                                        
-                                        # Детальное логирование найденной цены
-                                        logger.info(f"[zzap] ✅ НАЙДЕНА ЦЕНА: {price}₽{status_info} | ID: {row_id} | поставщик: {supplier_name} | бренд: {row_brand}")
-                                        logger.debug(f"[zzap] Полный текст строки (ID: {row_id}): {row_text[:200]}")
-                                except ValueError:
-                                    continue
+                    
+                    # Если нашли цену в ячейке
+                    if price:
+                        # Добавляем цену в список
+                        prices.append(price)
+                        # Логируем статус товара для отладки
+                        status_info = ""
+                        if "под заказ" in row_text_lower:
+                            status_info = " [под заказ]"
+                        elif "в наличии" in row_text_lower:
+                            status_info = " [в наличии]"
+                        
+                        # Детальное логирование найденной цены
+                        logger.info(f"[zzap] ✅ НАЙДЕНА ЦЕНА: {price}₽{status_info} | ID: {row_id} | ячейка {price_cell_index} | поставщик: {supplier_name} | бренд: {row_brand}")
+                        logger.debug(f"[zzap] Текст ячейки с ценой: {price_cell_text[:150]}")
+                    else:
+                        logger.debug(f"[zzap] Цена не найдена в ячейках строки {row_id}")
 
                 except Exception:
                     continue
