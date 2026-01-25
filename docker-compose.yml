@@ -41,6 +41,12 @@ services:
     volumes:
       - ./data:/app/data
       - ./cookies_backup:/app/cookies_backup
+      - ./zzap_cdp_client.py:/app/zzap_cdp_client.py
+      - ./stparts_cdp_client.py:/app/stparts_cdp_client.py
+      - ./trast_cdp_client.py:/app/trast_cdp_client.py
+      - ./autovid_cdp_client.py:/app/autovid_cdp_client.py
+      - ./autotrade_client.py:/app/autotrade_client.py
+      - ./worker.py:/app/worker.py
     environment:
       - BROWSER_MODE=headless
       - DATABASE_PATH=/app/data/tasks.db
