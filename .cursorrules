@@ -1,0 +1,21 @@
+# AI Purchase Agent - Правила для Cursor
+
+## Общие правила
+- Всегда пиши pytest тесты для новых функций
+- Логируй каждый шаг: logger.info(f"Найдено {len(items)} элементов")
+- Используй try/except с детальным логированием ошибок
+
+## Парсеры (zzap, stparts, trast, autovid, autotrade)
+- Перед изменением селекторов — проверь актуальный HTML в tests/html/
+- Используй page.wait_for_selector() с timeout 10000
+- Фильтр б/у: проверяй "б/у", "уценка", "бывш" в ПОЛНОМ тексте строки
+- Бренд фильтруй по CONTAINS, не EQUALS ("FORD JMC" проходит фильтр "FORD")
+
+## База данных
+- Путь к базе ТОЛЬКО /app/data/tasks.db
+- Никогда не использовать /app/tasks.db
+
+## Деплой
+- git push ПЕРЕД деплоем на сервер
+- После деплоя проверить логи: docker-compose logs --tail=50 worker
+
