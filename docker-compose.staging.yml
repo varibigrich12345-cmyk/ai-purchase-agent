@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  web-staging:
+    build: .
+    ports:
+      - "8081:8000"
+    environment:
+      - DATABASE_PATH=/app/data/tasks_staging.db
+      - ENV=staging
+    volumes:
+      - ./data_staging:/app/data
+      - ./sites:/app/sites
+    restart: unless-stopped
+
+  worker-staging:
+    build: .
+    command: python worker.py
+    environment:
+      - DATABASE_PATH=/app/data/tasks_staging.db
+      - ENV=staging
+    volumes:
+      - ./data_staging:/app/data
+      - ./zzap_cdp_client.py:/app/zzap_cdp_client.py
+      - ./trast_cdp_client.py:/app/trast_cdp_client.py
+      - ./stparts_cdp_client.py:/app/stparts_cdp_client.py
+      - ./autovid_cdp_client.py:/app/autovid_cdp_client.py
+      - ./autotrade_client.py:/app/autotrade_client.py
+      - ./worker.py:/app/worker.py
+    restart: unless-stopped
+
