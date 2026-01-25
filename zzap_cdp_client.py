@@ -110,14 +110,33 @@ class ZZapCDPClient(BaseBrowserClient):
                     'url': self.page.url
                 }
 
-            # Ждём загрузки данных через AJAX
+            # Ждём загрузки данных через AJAX (с перезагрузкой при зависании)
             logger.info("[zzap] Ожидание AJAX данных...")
-            for i in range(15):
+            ajax_loaded = False
+
+            # Первая попытка: 10 секунд
+            for i in range(10):
                 page_text = await self.page.inner_text('body')
                 if 'Нет никаких данных' not in page_text and 'Одна минута' not in page_text:
                     logger.info(f"[zzap] Данные загрузились за {i+1} сек")
+                    ajax_loaded = True
                     break
                 await asyncio.sleep(1)
+
+            # Если не загрузилось - перезагрузка страницы
+            if not ajax_loaded:
+                logger.info("[zzap] AJAX завис >10 сек, перезагрузка страницы...")
+                await self.page.reload(wait_until='networkidle')
+                await asyncio.sleep(2)
+
+                # Вторая попытка: 15 секунд после reload
+                for i in range(15):
+                    page_text = await self.page.inner_text('body')
+                    if 'Нет никаких данных' not in page_text and 'Одна минута' not in page_text:
+                        logger.info(f"[zzap] Данные загрузились после reload за {i+1} сек")
+                        ajax_loaded = True
+                        break
+                    await asyncio.sleep(1)
 
             await asyncio.sleep(2)
 
