@@ -1,0 +1,24 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+
+  - repo: https://github.com/psf/black
+    rev: 24.1.1
+    hooks:
+      - id: black
+        language_version: python3.11
+
+  - repo: local
+    hooks:
+      - id: pytest-check
+        name: pytest
+        entry: pytest tests/ -v --tb=line
+        language: system
+        pass_filenames: false
+        always_run: true
+
