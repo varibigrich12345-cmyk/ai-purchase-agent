@@ -142,30 +142,51 @@ class STPartsCDPClient(BaseBrowserClient):
             await self.page.goto(self.BASE_URL, wait_until='domcontentloaded', timeout=60000)
 
             # Wait for bot check to complete (page may reload)
-            for _ in range(10):  # Max 10 attempts, 3 sec each
+            for attempt in range(10):  # Max 10 attempts, 3 sec each
                 await self.page.wait_for_timeout(3000)
 
                 # Check if we're past the challenge
                 content = await self.page.content()
-                url = self.page.url
 
-                # Признаки успешного прохождения
-                if 'Access denied' not in content and 'pass browser checks' not in content:
+                # Признаки блокировки (русская и английская версия)
+                blocked_indicators = [
+                    'Access denied',
+                    'Доступ запрещен',
+                    'Доступ запрещён',
+                    'pass browser checks',
+                    'пройти проверку браузера',
+                ]
+
+                is_blocked = any(indicator in content for indicator in blocked_indicators)
+
+                if not is_blocked:
                     logger.info(f"[{self.SITE_NAME}] Проверка антибота пройдена!")
                     return True
 
                 # Если блокировка - пробуем кликнуть на ссылку проверки
-                if 'pass browser checks' in content:
-                    logger.info(f"[{self.SITE_NAME}] Обнаружена блокировка, пробуем пройти проверку...")
+                logger.info(f"[{self.SITE_NAME}] Попытка {attempt + 1}/10: обнаружена блокировка, пробуем пройти проверку...")
+
+                # Пробуем разные варианты ссылки
+                link_selectors = [
+                    'a:has-text("пройти проверку браузера")',
+                    'a:has-text("pass browser checks")',
+                    'a[href*="check"]',
+                ]
+
+                for selector in link_selectors:
                     try:
-                        link = self.page.locator('a:has-text("pass browser checks")')
+                        link = self.page.locator(selector)
                         if await link.count() > 0:
-                            await link.click()
+                            await link.first.click()
+                            logger.info(f"[{self.SITE_NAME}] Кликнули на ссылку проверки: {selector}")
                             await self.page.wait_for_timeout(5000)
+                            break
                     except Exception as e:
-                        logger.debug(f"[{self.SITE_NAME}] Не удалось кликнуть на ссылку проверки: {e}")
+                        logger.debug(f"[{self.SITE_NAME}] Селектор {selector} не сработал: {e}")
 
             logger.warning(f"[{self.SITE_NAME}] Проверка антибота не пройдена за отведённое время")
+            # Сохраняем скриншот для отладки
+            await self.page.screenshot(path='/tmp/stparts_blocked.png')
             return False
 
         except Exception as e:
