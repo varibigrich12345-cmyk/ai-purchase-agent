@@ -51,7 +51,7 @@ class STPartsCDPClient(BaseBrowserClient):
                     continue
 
             # Если есть форма логина (поле пароля видно) - не авторизованы
-            if await self.page.locator('input[name="pass"]').count() > 0:
+            if await self.page.locator('input[aria-label="Пароль"]').count() > 0:
                 return False
 
             return False
@@ -76,8 +76,8 @@ class STPartsCDPClient(BaseBrowserClient):
             logger.info(f"[stparts] HTML страницы (первые 2000 символов): {html_content[:2000]}")
             logger.info(f"[stparts] URL страницы: {self.page.url}")
 
-            # Заполняем логин (input[name="login"])
-            login_field = 'input[name="login"]'
+            # Заполняем логин (input[aria-label="Логин"])
+            login_field = 'input[aria-label="Логин"]'
             if await self.page.locator(login_field).count() > 0:
                 await self.page.fill(login_field, STPARTS_LOGIN)
                 logger.info(f"[stparts] Логин введён: {STPARTS_LOGIN}")
@@ -85,24 +85,16 @@ class STPartsCDPClient(BaseBrowserClient):
                 logger.error("[stparts] Поле логина не найдено")
                 return False
 
-            # Заполняем пароль (input[name="pass"])
-            password_field = 'input[name="pass"]'
+            # Заполняем пароль (input[aria-label="Пароль"])
+            password_field = 'input[aria-label="Пароль"]'
             if await self.page.locator(password_field).count() > 0:
                 await self.page.fill(password_field, STPARTS_PASSWORD)
             else:
                 logger.error("[stparts] Поле пароля не найдено")
                 return False
 
-            # Нажимаем кнопку входа (submit рядом с формой)
-            try:
-                # Ищем submit кнопку в форме авторизации
-                await self.page.locator('input[name="pass"]').press("Enter")
-            except:
-                try:
-                    await self.page.click('input[type="submit"][name="go"]')
-                except:
-                    logger.error("[stparts] Кнопка входа не найдена")
-                    return False
+            # Нажимаем Enter для входа
+            await self.page.locator('input[aria-label="Пароль"]').press("Enter")
 
             # Ждём загрузки
             await self.page.wait_for_timeout(5000)
@@ -159,8 +151,8 @@ class STPartsCDPClient(BaseBrowserClient):
                 await self.page.goto(f"{self.BASE_URL}/clients", wait_until='networkidle', timeout=60000)
                 await self.page.wait_for_timeout(2000)
 
-                # Ищем поле поиска по артикулу (input[name="pcode"])
-                search_field = 'input[name="pcode"]'
+                # Ищем поле поиска по артикулу (input[aria-label*="Поиск по артикулу"])
+                search_field = 'input[aria-label*="Поиск по артикулу"]'
                 if await self.page.locator(search_field).count() > 0:
                     await self.page.fill(search_field, partnumber)
                     await self.page.press(search_field, "Enter")
