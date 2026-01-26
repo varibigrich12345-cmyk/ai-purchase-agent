@@ -29,6 +29,10 @@ ZZAP_MAX_PRICE = 50000
 STPARTS_MIN_PRICE = 2000
 STPARTS_MAX_PRICE = 50000
 
+# Proxy settings (optional) - format: http://user:pass@host:port
+STPARTS_PROXY = os.getenv("STPARTS_PROXY", "")
+TRAST_PROXY = os.getenv("TRAST_PROXY", "")
+
 # Chrome CDP settings
 CHROME_CDP_ENDPOINT = os.getenv("CHROME_CDP_ENDPOINT", "http://localhost:9222")
 COOKIES_BACKUP_DIR = BASEDIR / "cookies_backup"

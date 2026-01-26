@@ -19,3 +19,4 @@
 - git push ПЕРЕД деплоем на сервер
 - После деплоя проверить логи: docker-compose logs --tail=50 worker
 
+

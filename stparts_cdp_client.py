@@ -15,12 +15,9 @@ from typing import Dict, Any, List
 
 from playwright.async_api import async_playwright
 from base_browser_client import BaseBrowserClient
-from config import STPARTS_LOGIN, STPARTS_PASSWORD, COOKIES_BACKUP_DIR
+from config import STPARTS_LOGIN, STPARTS_PASSWORD, STPARTS_PROXY, COOKIES_BACKUP_DIR
 
 logger = logging.getLogger(__name__)
-
-# Proxy for STparts (optional) - set STPARTS_PROXY=http://user:pass@host:port
-STPARTS_PROXY = os.getenv("STPARTS_PROXY", "")
 
 
 class STPartsCDPClient(BaseBrowserClient):
