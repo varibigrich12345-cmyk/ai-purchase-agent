@@ -239,6 +239,31 @@ class STPartsCDPClient(BaseBrowserClient):
             await self.page.goto(login_url, wait_until='networkidle', timeout=60000)
             await self.page.wait_for_timeout(2000)
 
+            # Проверяем блокировку и пытаемся пройти
+            content = await self.page.content()
+            if 'Доступ запрещен' in content or 'Доступ запрещён' in content or 'Access denied' in content:
+                logger.info("[stparts] Обнаружена блокировка на странице логина, пробуем пройти...")
+                # Кликаем на ссылку проверки
+                try:
+                    link = self.page.locator('a:has-text("пройти проверку браузера")')
+                    if await link.count() > 0:
+                        await link.first.click()
+                        await self.page.wait_for_timeout(5000)
+                        logger.info("[stparts] Кликнули на ссылку проверки браузера")
+
+                        # Ждём прохождения и снова переходим на /clients
+                        for _ in range(5):
+                            await self.page.wait_for_timeout(3000)
+                            content = await self.page.content()
+                            if 'Доступ запрещен' not in content and 'Access denied' not in content:
+                                break
+
+                        # Переходим снова на страницу логина
+                        await self.page.goto(login_url, wait_until='networkidle', timeout=60000)
+                        await self.page.wait_for_timeout(2000)
+                except Exception as e:
+                    logger.error(f"[stparts] Ошибка прохождения проверки: {e}")
+
             # Отладка - сохраняем скриншот и HTML
             await self.page.screenshot(path='/tmp/stparts_login.png')
             html_content = await self.page.content()
