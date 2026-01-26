@@ -9,20 +9,168 @@ CDP клиент для stparts.ru - подключается к уже запу
 
 import asyncio
 import logging
+import os
 import re
 from typing import Dict, Any, List
 
+from playwright.async_api import async_playwright
 from base_browser_client import BaseBrowserClient
-from config import STPARTS_LOGIN, STPARTS_PASSWORD
+from config import STPARTS_LOGIN, STPARTS_PASSWORD, COOKIES_BACKUP_DIR
 
 logger = logging.getLogger(__name__)
 
+# Proxy for STparts (optional) - set STPARTS_PROXY=http://user:pass@host:port
+STPARTS_PROXY = os.getenv("STPARTS_PROXY", "")
+
 
 class STPartsCDPClient(BaseBrowserClient):
-    """CDP клиент для stparts.ru с авторизацией и keep-alive."""
+    """CDP клиент для stparts.ru с авторизацией и keep-alive.
+
+    Использует stealth-режим для обхода антибот защиты.
+    """
 
     SITE_NAME = "stparts"
     BASE_URL = "https://stparts.ru"
+
+    async def connect(self) -> bool:
+        """Подключиться к браузеру со stealth настройками для обхода защиты."""
+        try:
+            self.playwright = await async_playwright().start()
+
+            logger.info(f"[{self.SITE_NAME}] Запуск Chromium в stealth режиме")
+
+            # Stealth launch args
+            launch_args = [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-blink-features=AutomationControlled',  # Hide automation
+                '--no-first-run',
+                '--disable-infobars',
+                '--window-size=1920,1080',
+                '--start-maximized',
+            ]
+
+            self.browser = await self.playwright.chromium.launch(
+                headless=True,
+                args=launch_args
+            )
+
+            # Proxy settings
+            proxy_config = None
+            if STPARTS_PROXY:
+                logger.info(f"[{self.SITE_NAME}] Используем прокси: {STPARTS_PROXY.split('@')[-1] if '@' in STPARTS_PROXY else STPARTS_PROXY}")
+                proxy_config = {"server": STPARTS_PROXY}
+
+            # Stealth context with realistic fingerprint
+            self.context = await self.browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                locale='ru-RU',
+                timezone_id='Europe/Moscow',
+                proxy=proxy_config,
+                java_script_enabled=True,
+                bypass_csp=True,
+                permissions=['geolocation'],
+                color_scheme='light',
+                extra_http_headers={
+                    'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                    'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': '"Windows"',
+                }
+            )
+
+            # Блокируем изображения, CSS и шрифты для ускорения
+            await self.context.route("**/*.{png,jpg,jpeg,gif,webp,css,woff,woff2}", lambda route: route.abort())
+            logger.info(f"[{self.SITE_NAME}] Создан stealth контекст с блокировкой ресурсов")
+
+            # Anti-detection scripts
+            await self.context.add_init_script("""
+                // Remove webdriver property
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+
+                // Fix plugins
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5]
+                });
+
+                // Fix languages
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['ru-RU', 'ru', 'en-US', 'en']
+                });
+
+                // Fix permissions
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: Notification.permission }) :
+                        originalQuery(parameters)
+                );
+            """)
+
+            # Load cookies from backup
+            await self._load_cookies_from_backup()
+
+            # Create page
+            self.page = await self.context.new_page()
+
+            self.is_connected = True
+            logger.info(f"[{self.SITE_NAME}] Подключение установлено (stealth режим)")
+
+            # Navigate to site and try to pass bot check
+            await self._pass_bot_check()
+
+            # Check auth
+            await self._ensure_authenticated()
+
+            # Start keep-alive
+            self._start_keep_alive()
+
+            return True
+
+        except Exception as e:
+            logger.error(f"[{self.SITE_NAME}] Ошибка подключения: {e}")
+            return False
+
+    async def _pass_bot_check(self) -> bool:
+        """Пройти проверку антибота на STparts."""
+        try:
+            logger.info(f"[{self.SITE_NAME}] Проходим проверку антибота...")
+
+            await self.page.goto(self.BASE_URL, wait_until='domcontentloaded', timeout=60000)
+
+            # Wait for bot check to complete (page may reload)
+            for _ in range(10):  # Max 10 attempts, 3 sec each
+                await self.page.wait_for_timeout(3000)
+
+                # Check if we're past the challenge
+                content = await self.page.content()
+                url = self.page.url
+
+                # Признаки успешного прохождения
+                if 'Access denied' not in content and 'pass browser checks' not in content:
+                    logger.info(f"[{self.SITE_NAME}] Проверка антибота пройдена!")
+                    return True
+
+                # Если блокировка - пробуем кликнуть на ссылку проверки
+                if 'pass browser checks' in content:
+                    logger.info(f"[{self.SITE_NAME}] Обнаружена блокировка, пробуем пройти проверку...")
+                    try:
+                        link = self.page.locator('a:has-text("pass browser checks")')
+                        if await link.count() > 0:
+                            await link.click()
+                            await self.page.wait_for_timeout(5000)
+                    except Exception as e:
+                        logger.debug(f"[{self.SITE_NAME}] Не удалось кликнуть на ссылку проверки: {e}")
+
+            logger.warning(f"[{self.SITE_NAME}] Проверка антибота не пройдена за отведённое время")
+            return False
+
+        except Exception as e:
+            logger.error(f"[{self.SITE_NAME}] Ошибка прохождения проверки антибота: {e}")
+            return False
 
     async def check_auth(self) -> bool:
         """Проверить, авторизован ли пользователь на stparts.ru."""
